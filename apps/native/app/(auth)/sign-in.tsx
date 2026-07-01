@@ -9,25 +9,28 @@ import {
   TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Self-contained brand tokens for this app (values only — mirrors packages/ui/src/styles/globals.css).
+import { useAuth } from "@/contexts/auth-context";
+
 const BRAND = {
-  ink: "#211D17",
   brand: "#C89A54",
-  mutedOnDark: "#B49164",
+  muted: "#8A8378",
 };
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
+  const { signIn, isSigningIn, error, clearError } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
 
-  function handleSignIn() {
-    // TODO: wire up to the auth endpoint once it exists on the server.
+  async function handleSignIn() {
+    if (!username || !password) return;
+    await signIn(username.trim().toLowerCase(), password);
+    // On success, RootNavigator's Stack.Protected guard swaps to (app) automatically.
   }
 
   return (
@@ -63,7 +66,14 @@ export default function SignInScreen() {
           Firm staff credentials only.
         </Text>
 
-        <TextField className="mb-4">
+        {error ? (
+          <View className="mb-4 flex-row items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5">
+            <Ionicons name="warning-outline" size={14} color="#B3413A" style={{ marginTop: 1 }} />
+            <Text className="flex-1 text-xs text-destructive">{error}</Text>
+          </View>
+        ) : null}
+
+        <TextField className="mb-4" isInvalid={Boolean(error)}>
           <Label>
             <Label.Text>Username</Label.Text>
           </Label>
@@ -71,12 +81,16 @@ export default function SignInScreen() {
             placeholder="e.g. r.mareanadzo"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isSigningIn}
             value={username}
-            onChangeText={setUsername}
+            onChangeText={(text) => {
+              setUsername(text);
+              if (error) clearError();
+            }}
           />
         </TextField>
 
-        <TextField className="mb-1">
+        <TextField className="mb-1" isInvalid={Boolean(error)}>
           <Label>
             <Label.Text>Password</Label.Text>
           </Label>
@@ -84,8 +98,12 @@ export default function SignInScreen() {
             <Input
               placeholder="••••••••"
               secureTextEntry={!showPassword}
+              editable={!isSigningIn}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (error) clearError();
+              }}
               className="pr-10"
             />
             <Pressable
@@ -98,7 +116,7 @@ export default function SignInScreen() {
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color="#8A8378"
+                color={BRAND.muted}
               />
             </Pressable>
           </View>
@@ -117,8 +135,15 @@ export default function SignInScreen() {
           </LinkButton>
         </View>
 
-        <Button variant="primary" size="lg" className="w-full" onPress={handleSignIn}>
-          <Button.Label>Sign in</Button.Label>
+        <Button
+          variant="primary"
+          size="lg"
+          className="w-full"
+          onPress={handleSignIn}
+          isDisabled={isSigningIn || !username || !password}
+        >
+          {isSigningIn ? <ActivityIndicator color="#fff" /> : null}
+          <Button.Label>{isSigningIn ? "Signing in…" : "Sign in"}</Button.Label>
         </Button>
 
         <Pressable className="mt-5 flex-row items-center justify-center gap-1.5">

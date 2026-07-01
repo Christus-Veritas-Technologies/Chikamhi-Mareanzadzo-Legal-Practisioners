@@ -16,7 +16,8 @@
     "db:push": "turbo run db:push -F @CMLP/db",
     "db:studio": "turbo run db:studio -F @CMLP/db",
     "db:generate": "turbo run db:generate -F @CMLP/db",
-    "db:migrate": "turbo run db:migrate -F @CMLP/db"
+    "db:migrate": "turbo run db:migrate -F @CMLP/db",
+    "db:seed": "turbo run db:seed -F @CMLP/db"
   },
   "dependencies": {
     "@CMLP/env": "workspace:*",

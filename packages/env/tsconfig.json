@@ -1,0 +1,3 @@
+{
+  "extends": "@CMLP/config/tsconfig.base.json"
+}

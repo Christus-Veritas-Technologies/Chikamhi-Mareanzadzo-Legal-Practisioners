@@ -1,0 +1,33 @@
+{
+  "name": "CMLP",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:native": "turbo run dev -F native",
+    "dev:web": "turbo run dev -F web",
+    "dev:server": "turbo run dev -F server",
+    "db:push": "turbo run db:push -F @CMLP/db",
+    "db:studio": "turbo run db:studio -F @CMLP/db",
+    "db:generate": "turbo run db:generate -F @CMLP/db",
+    "db:migrate": "turbo run db:migrate -F @CMLP/db"
+  },
+  "dependencies": {
+    "@CMLP/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@CMLP/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "turbo": "^2.9.16",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@11.4.0"
+}

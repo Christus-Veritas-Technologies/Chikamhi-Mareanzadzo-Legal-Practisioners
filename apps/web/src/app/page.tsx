@@ -1,5 +1,10 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export default function Index() {
-  redirect("/sign-in");
+import { SESSION_COOKIE } from "@/lib/session";
+
+export default async function Index() {
+  const cookieStore = await cookies();
+  const hasSession = Boolean(cookieStore.get(SESSION_COOKIE)?.value);
+  redirect(hasSession ? "/dashboard" : "/sign-in");
 }

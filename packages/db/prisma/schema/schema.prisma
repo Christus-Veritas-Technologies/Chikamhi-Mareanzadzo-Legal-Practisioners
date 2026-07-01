@@ -8,3 +8,25 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum StaffRole {
+  ADMIN
+  ATTORNEY
+  PARALEGAL
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  passwordSalt String
+  role         StaffRole @default(PARALEGAL)
+  isActive     Boolean   @default(true)
+  lastActiveAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
+}

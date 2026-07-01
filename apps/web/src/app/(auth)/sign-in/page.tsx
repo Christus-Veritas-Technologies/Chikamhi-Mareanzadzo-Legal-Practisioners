@@ -9,15 +9,45 @@ import {
   InputGroupInput,
 } from "@CMLP/ui/components/input-group";
 import { Label } from "@CMLP/ui/components/label";
-import { Eye, EyeOff, Lock, ShieldCheck, User } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Loader2, Lock, ShieldCheck, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function SignInPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // TODO: wire up to the auth endpoint once it exists on the server.
+    setError(null);
+    setIsSubmitting(true);
+
+    const formData = new FormData(e.currentTarget);
+    const username = String(formData.get("username") ?? "");
+    const password = String(formData.get("password") ?? "");
+
+    try {
+      const res = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error?.message ?? "Something went wrong. Please try again.");
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -52,13 +82,23 @@ export default function SignInPage() {
 
       {/* Sign-in form */}
       <div className="flex flex-1 items-center justify-center px-6 py-12 lg:px-16">
-        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm" noValidate>
           <h2 className="font-serif text-2xl font-semibold text-foreground">Sign in</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Use your firm staff credentials to continue.
           </p>
 
-          <div className="mt-8 space-y-4">
+          {error ? (
+            <div
+              role="alert"
+              className="mt-5 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive"
+            >
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <p>{error}</p>
+            </div>
+          ) : null}
+
+          <div className="mt-6 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="username">Username</Label>
               <InputGroup>
@@ -70,6 +110,7 @@ export default function SignInPage() {
                   name="username"
                   autoComplete="username"
                   placeholder="e.g. r.mareanadzo"
+                  disabled={isSubmitting}
                   required
                 />
               </InputGroup>
@@ -87,6 +128,7 @@ export default function SignInPage() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="••••••••"
+                  disabled={isSubmitting}
                   required
                 />
                 <InputGroupAddon align="inline-end">
@@ -112,8 +154,9 @@ export default function SignInPage() {
             </a>
           </div>
 
-          <Button type="submit" size="lg" className="mt-6 w-full">
-            Sign in
+          <Button type="submit" size="lg" className="mt-6 w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
+            {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
 
           <button

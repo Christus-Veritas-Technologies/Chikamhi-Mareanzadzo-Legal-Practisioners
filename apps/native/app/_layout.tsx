@@ -6,15 +6,15 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 
+// (auth) covers Sign in. (app) will hold the authenticated Tabs stack once we build it.
 export const unstable_settings = {
-  initialRouteName: "(drawer)",
+  initialRouteName: "(auth)",
 };
 
 function StackLayout() {
   return (
-    <Stack screenOptions={{}}>
-      <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ title: "Modal", presentation: "modal" }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
     </Stack>
   );
 }

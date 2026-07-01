@@ -3,3 +3,13 @@
 @import "heroui-native/styles";
 
 @source './node_modules/heroui-native/lib';
+
+/* C&M brand tokens — same values as packages/ui/src/styles/globals.css, kept self-contained per app. */
+@theme {
+  --font-serif: "Fraunces", "Georgia", serif;
+  --color-ink: #211d17;
+  --color-ink-foreground: #f5f0e6;
+  --color-brand: #c89a54;
+  --color-brand-foreground: #211d17;
+  --color-brand-muted: #f3e4c6;
+}

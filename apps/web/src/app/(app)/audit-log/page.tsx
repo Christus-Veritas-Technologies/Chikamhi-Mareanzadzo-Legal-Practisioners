@@ -78,6 +78,26 @@ export default function AuditLogPage() {
   }, [allEntries]);
   const actions = useMemo(() => Array.from(new Set(allEntries.map((e) => e.action))), [allEntries]);
 
+  function exportCsv() {
+    const header = ["Actor", "Action", "Target", "Timestamp", "Source IP"];
+    const rows = entries.map((e) => [
+      e.actor,
+      ACTION_LABELS[e.action] ?? e.action,
+      e.target,
+      e.timestamp,
+      e.sourceIp,
+    ]);
+    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -87,7 +107,7 @@ export default function AuditLogPage() {
             Every action on every document. Tamper-evident and retained for 7 years.
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={entries.length === 0}>
           <Download />
           Export CSV
         </Button>

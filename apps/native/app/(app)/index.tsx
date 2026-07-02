@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useThemeColor } from "heroui-native";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -50,7 +50,10 @@ export default function HomeScreen() {
           <Text className="font-serif text-xl font-semibold text-foreground">{firstName}</Text>
         </View>
         <View className="flex-row items-center gap-3">
-          <Pressable hitSlop={8}>
+          <Pressable
+            hitSlop={8}
+            onPress={() => Alert.alert("No new notifications", "There's no notification system wired up yet.")}
+          >
             <Ionicons name="notifications-outline" size={20} color={foreground} />
           </Pressable>
           <View className="h-8 w-8 items-center justify-center rounded-full bg-brand-muted">

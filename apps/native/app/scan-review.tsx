@@ -1,20 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { RouteError } from "@/components/route-error";
+import { getPages, removePage, setPages } from "@/lib/scan-session";
 
 export default function ScanReviewScreen() {
-  const { count } = useLocalSearchParams<{ count: string }>();
-  const [pages, setPages] = useState(
-    Array.from({ length: Number(count) || 0 }, (_, i) => `Page ${i + 1}`),
-  );
+  const [pages, setLocalPages] = useState<string[]>(() => getPages());
 
-  function removePage(index: number) {
-    setPages((p) => p.filter((_, i) => i !== index));
+  function removeAt(index: number) {
+    removePage(index);
+    setLocalPages(getPages());
+  }
+
+  function continueToAssign() {
+    setPages(pages);
+    router.push({ pathname: "/scan-assign", params: { count: String(pages.length) } });
   }
 
   return (
@@ -35,39 +39,38 @@ export default function ScanReviewScreen() {
       ) : (
         <>
           <Text className="text-xs text-muted-foreground">
-            {pages.length} page{pages.length > 1 ? "s" : ""} captured — crop, reorder, or remove
-            before continuing.
+            {pages.length} page{pages.length > 1 ? "s" : ""} captured — remove any before continuing.
           </Text>
 
-          <View className="mt-3 flex-row flex-wrap gap-3">
-            {pages.map((page, index) => (
-              <View key={page} className="items-center gap-1">
-                <View className="h-28 w-20 items-center justify-center rounded-lg bg-muted">
-                  <Text className="text-xs text-muted-foreground">{index + 1}</Text>
+          <ScrollView className="mt-3">
+            <View className="flex-row flex-wrap gap-3">
+              {pages.map((uri, index) => (
+                <View key={uri} className="items-center gap-1">
+                  <View className="h-28 w-20 overflow-hidden rounded-lg bg-muted">
+                    <Image source={{ uri }} className="h-full w-full" resizeMode="cover" />
+                  </View>
+                  <Pressable
+                    onPress={() => removeAt(index)}
+                    className="flex-row items-center gap-1"
+                    hitSlop={6}
+                  >
+                    <Ionicons name="trash-outline" size={12} color="#B3413A" />
+                    <Text className="text-[10px] text-destructive">Remove</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  onPress={() => removePage(index)}
-                  className="flex-row items-center gap-1"
-                  hitSlop={6}
-                >
-                  <Ionicons name="trash-outline" size={12} color="#B3413A" />
-                  <Text className="text-[10px] text-destructive">Remove</Text>
-                </Pressable>
-              </View>
-            ))}
-            <Pressable
-              onPress={() => router.back()}
-              className="h-28 w-20 items-center justify-center rounded-lg border border-dashed border-border"
-            >
-              <Ionicons name="add" size={20} color="#8A8378" />
-              <Text className="mt-1 text-[10px] text-muted-foreground">Add page</Text>
-            </Pressable>
-          </View>
+              ))}
+              <Pressable
+                onPress={() => router.back()}
+                className="h-28 w-20 items-center justify-center rounded-lg border border-dashed border-border"
+              >
+                <Ionicons name="add" size={20} color="#8A8378" />
+                <Text className="mt-1 text-[10px] text-muted-foreground">Add page</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
 
           <Pressable
-            onPress={() =>
-              router.push({ pathname: "/scan-assign", params: { count: String(pages.length) } })
-            }
+            onPress={continueToAssign}
             className="mt-6 items-center rounded-xl bg-primary py-3"
           >
             <Text className="text-sm font-semibold text-primary-foreground">Continue</Text>

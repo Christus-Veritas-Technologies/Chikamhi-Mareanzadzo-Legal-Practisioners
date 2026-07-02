@@ -1,29 +1,27 @@
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
+import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/contexts/auth-context";
+import { clearPages, getPages } from "@/lib/scan-session";
 
 type ClientOption = { id: string; name: string };
 type CaseOption = { id: string; title: string; caseNumber: string; client: { id: string } };
 
-function extToFileType(name: string) {
-  return name.split(".").pop()?.toLowerCase() ?? "file";
-}
-
 export default function ScanAssignScreen() {
-  const { count } = useLocalSearchParams<{ count: string }>();
+  const pages = useMemo(() => getPages(), []);
   const { token } = useAuth();
   const [clientId, setClientId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [filename, setFilename] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   const { data: clientsData, isLoading: clientsLoading, error: clientsError, refetch: refetchClients } =
     useApi<{ clients: ClientOption[] }>("/clients");
@@ -36,22 +34,48 @@ export default function ScanAssignScreen() {
     [cases, clientId],
   );
 
-  const canConfirm = Boolean(clientId && caseId && filename.trim() && !isSubmitting);
+  const canConfirm = Boolean(clientId && caseId && filename.trim() && !isSubmitting && pages.length > 0);
 
   async function confirm() {
-    if (!clientId || !caseId || !filename.trim() || !token) return;
+    if (!clientId || !caseId || !filename.trim() || !token || pages.length === 0) return;
     setIsSubmitting(true);
     setSubmitError(null);
+    setProgress(0);
+
+    const baseName = filename.trim().replace(/\.[^/.]+$/, "");
+    const filedNames: string[] = [];
+
     try {
-      await apiFetch(
-        "/documents",
-        {
+      for (let i = 0; i < pages.length; i++) {
+        const uri = pages[i];
+        const name = pages.length > 1 ? `${baseName} (page ${i + 1} of ${pages.length}).jpg` : `${baseName}.jpg`;
+
+        const { document, uploadUrl } = await apiFetch<{
+          document: { id: string };
+          uploadUrl: string | null;
+        }>("/documents", {
           method: "POST",
-          body: { name: filename.trim(), fileType: extToFileType(filename.trim()), clientId, caseId },
+          body: { name, fileType: "jpg", clientId, caseId, contentType: "image/jpeg" },
           token,
-        },
-      );
-      router.replace({ pathname: "/upload-queue", params: { justAdded: filename } });
+        });
+
+        if (uploadUrl) {
+          const blob = await (await fetch(uri)).blob();
+          const putRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "image/jpeg" },
+            body: blob,
+          });
+          if (!putRes.ok) throw new Error(`Couldn't upload page ${i + 1} to storage.`);
+        }
+
+        filedNames.push(name);
+        setProgress(i + 1);
+        void document;
+      }
+
+      clearPages();
+      router.replace({ pathname: "/upload-queue", params: { justAdded: filedNames.join("|") } });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Couldn't file this scan.");
     } finally {
@@ -59,19 +83,28 @@ export default function ScanAssignScreen() {
     }
   }
 
+  if (pages.length === 0) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-8">
+        <Stack.Screen options={{ title: "Assign & upload" }} />
+        <EmptyState icon="scan-outline" title="Nothing to file" description="Go back and capture a scan first." />
+      </View>
+    );
+  }
+
   return (
     <ScrollView className="flex-1 bg-background px-5 pt-3" contentContainerStyle={{ paddingBottom: 32 }}>
       <Stack.Screen options={{ title: "Assign & upload" }} />
 
       <Text className="text-xs text-muted-foreground">
-        {count} page{Number(count) > 1 ? "s" : ""} ready — file this scan under a client and case.
+        {pages.length} page{pages.length > 1 ? "s" : ""} ready — file this scan under a client and case.
       </Text>
 
       <Text className="mt-4 mb-1 text-xs font-medium text-foreground">File name</Text>
       <TextInput
         value={filename}
         onChangeText={setFilename}
-        placeholder="e.g. Rates Clearance Certificate.jpg"
+        placeholder="e.g. Rates Clearance Certificate"
         placeholderTextColor="#8A8378"
         className="rounded-xl border border-border px-3 py-2.5 text-sm text-foreground"
       />
@@ -140,7 +173,7 @@ export default function ScanAssignScreen() {
         <Text
           className={`text-sm font-semibold ${canConfirm ? "text-primary-foreground" : "text-muted-foreground"}`}
         >
-          {isSubmitting ? "Filing…" : "Confirm & upload"}
+          {isSubmitting ? `Filing ${progress}/${pages.length}…` : "Confirm & upload"}
         </Text>
       </Pressable>
     </ScrollView>

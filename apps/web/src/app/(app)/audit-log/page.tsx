@@ -5,15 +5,42 @@ import { Download, History } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-import { AUDIT_LOG, type AuditAction } from "@/lib/audit-log-data";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { useApi } from "@/hooks/use-api";
 
-const ACTION_STYLES: Record<AuditAction, string> = {
-  Signed: "bg-success/15 text-success",
-  OCR: "bg-muted text-muted-foreground",
-  Moved: "bg-brand-muted text-brand-foreground",
-  Uploaded: "bg-brand-muted text-brand-foreground",
-  Viewed: "bg-muted text-muted-foreground",
-  Deleted: "bg-destructive/10 text-destructive",
+type AuditEntry = {
+  id: string;
+  actorId: string | null;
+  actor: string;
+  isSystem: boolean;
+  action: string;
+  target: string;
+  sourceIp: string;
+  timestamp: string;
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  VIEWED: "Viewed",
+  UPLOADED: "Uploaded",
+  SIGNED: "Signed",
+  FILED: "Filed",
+  MOVED: "Moved",
+  DELETED: "Deleted",
+  RESTORED: "Restored",
+  OCR_COMPLETED: "OCR",
+  CASE_OPENED: "Case opened",
+};
+
+const ACTION_STYLES: Record<string, string> = {
+  VIEWED: "bg-muted text-muted-foreground",
+  UPLOADED: "bg-brand-muted text-brand-foreground",
+  SIGNED: "bg-success/15 text-success",
+  FILED: "bg-success/15 text-success",
+  MOVED: "bg-brand-muted text-brand-foreground",
+  DELETED: "bg-destructive/10 text-destructive",
+  RESTORED: "bg-success/15 text-success",
+  OCR_COMPLETED: "bg-muted text-muted-foreground",
+  CASE_OPENED: "bg-brand-muted text-brand-foreground",
 };
 
 function initials(name: string) {
@@ -29,12 +56,27 @@ export default function AuditLogPage() {
   const [actorFilter, setActorFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
 
-  const actors = useMemo(() => Array.from(new Set(AUDIT_LOG.map((e) => e.actor))), []);
-  const actions = useMemo(() => Array.from(new Set(AUDIT_LOG.map((e) => e.action))), []);
+  const params = new URLSearchParams();
+  if (actorFilter) params.set("actorId", actorFilter);
+  if (actionFilter) params.set("action", actionFilter);
+  const query = params.toString();
+  const path = query ? `/audit-log?${query}` : "/audit-log";
 
-  const filtered = AUDIT_LOG.filter(
-    (e) => (!actorFilter || e.actor === actorFilter) && (!actionFilter || e.action === actionFilter),
-  );
+  const { data, isLoading, error, refetch } = useApi<{ entries: AuditEntry[] }>(path, [path]);
+  const entries = data?.entries ?? [];
+
+  // Unfiltered baseline so the filter dropdowns don't shrink as filters are applied.
+  const { data: allData } = useApi<{ entries: AuditEntry[] }>("/audit-log");
+  const allEntries = allData?.entries ?? [];
+
+  const actors = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of allEntries) {
+      if (e.actorId) map.set(e.actorId, e.actor);
+    }
+    return Array.from(map.entries());
+  }, [allEntries]);
+  const actions = useMemo(() => Array.from(new Set(allEntries.map((e) => e.action))), [allEntries]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -58,9 +100,9 @@ export default function AuditLogPage() {
           className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All actors</option>
-          {actors.map((a) => (
-            <option key={a} value={a}>
-              {a}
+          {actors.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
             </option>
           ))}
         </select>
@@ -72,14 +114,18 @@ export default function AuditLogPage() {
           <option value="">All actions</option>
           {actions.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {ACTION_LABELS[a] ?? a}
             </option>
           ))}
         </select>
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <LoadingState label="Loading audit log…" />
+        ) : error ? (
+          <InlineError message={error} onRetry={refetch} />
+        ) : entries.length === 0 ? (
           <EmptyState icon={History} title="No matching activity" description="Try a different actor or action filter." />
         ) : (
           <div className="overflow-x-auto">
@@ -94,7 +140,7 @@ export default function AuditLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((entry) => (
+                {entries.map((entry) => (
                   <tr key={entry.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -107,8 +153,10 @@ export default function AuditLogPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ACTION_STYLES[entry.action]}`}>
-                        {entry.action}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ACTION_STYLES[entry.action] ?? "bg-muted text-muted-foreground"}`}
+                      >
+                        {ACTION_LABELS[entry.action] ?? entry.action}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-brand">{entry.target}</td>

@@ -2,16 +2,20 @@
 
 import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
-import { Activity, Contact, FileText, Plus, UserX } from "lucide-react";
+import { Activity, Contact, FileText, Trash2, UserX } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import { CaseFormDialog } from "@/components/case-form-dialog";
+import { ClientFormDialog } from "@/components/client-form-dialog";
+import { ContactFormDialog } from "@/components/contact-form-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { StatusPill } from "@/components/status-pill";
-import { useApi } from "@/hooks/use-api";
+import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
 import { relativeTime } from "@/lib/format-time";
 
@@ -29,6 +33,7 @@ type ClientDetail = {
   name: string;
   type: string;
   regNumber: string | null;
+  attorneyOfRecordId: string | null;
   attorneyOfRecord: string;
   clientSince: string;
   documents: number;
@@ -44,6 +49,21 @@ type ClientDetail = {
   }[];
 };
 
+type Contact = { id: string; name: string; role: string | null; email: string | null; phone: string | null };
+type AuditEntry = { id: string; actor: string; isSystem: boolean; action: string; target: string; timestamp: string };
+
+const ACTION_LABELS: Record<string, string> = {
+  VIEWED: "Viewed",
+  UPLOADED: "Uploaded",
+  SIGNED: "Signed",
+  FILED: "Filed",
+  MOVED: "Moved",
+  DELETED: "Deleted",
+  RESTORED: "Restored",
+  OCR_COMPLETED: "OCR",
+  CASE_OPENED: "Case opened",
+};
+
 function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
@@ -54,6 +74,15 @@ export default function ClientDetailPage() {
 
   const { data, isLoading, error, refetch } = useApi<{ client: ClientDetail }>(`/clients/${clientId}`);
   const client = data?.client;
+
+  const { data: contactsData, refetch: refetchContacts } = useApi<{ contacts: Contact[] }>(
+    tab === "contacts" ? `/clients/${clientId}/contacts` : null,
+  );
+  const contacts = contactsData?.contacts ?? [];
+
+  const { data: activityData, isLoading: activityLoading, error: activityError, refetch: refetchActivity } =
+    useApi<{ entries: AuditEntry[] }>(tab === "activity" ? `/audit-log?clientId=${clientId}` : null);
+  const activity = activityData?.entries ?? [];
 
   if (isLoading) {
     return <LoadingState label="Loading client…" />;
@@ -80,6 +109,15 @@ export default function ClientDetailPage() {
 
   const cases = client.cases;
 
+  async function removeContact(contactId: string) {
+    try {
+      await apiFetch(`/clients/${clientId}/contacts/${contactId}`, { method: "DELETE" });
+      refetchContacts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove contact.");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <p className="text-xs text-muted-foreground">
@@ -104,11 +142,19 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">Edit client</Button>
-          <Button>
-            <Plus />
-            New case
-          </Button>
+          <ClientFormDialog
+            mode="edit"
+            clientId={client.id}
+            initial={{
+              name: client.name,
+              type: client.type,
+              regNumber: client.regNumber,
+              attorneyOfRecordId: client.attorneyOfRecordId,
+            }}
+            onSaved={refetch}
+            trigger={<Button variant="outline">Edit client</Button>}
+          />
+          <CaseFormDialog clientId={client.id} onSaved={refetch} trigger={<Button>New case</Button>} />
         </div>
       </div>
 
@@ -141,7 +187,7 @@ export default function ClientDetailPage() {
             icon={FileText}
             title="No cases yet"
             description="Cases opened for this client will show up here."
-            action={<Button size="sm">New case</Button>}
+            action={<CaseFormDialog clientId={client.id} onSaved={refetch} trigger={<Button size="sm">New case</Button>} />}
           />
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -175,10 +221,7 @@ export default function ClientDetailPage() {
           title="Documents view coming soon"
           description="Browse this client's documents directly from the global Documents library for now."
           action={
-            <Link
-              href="/documents"
-              className={buttonVariants({ size: "sm", variant: "outline" })}
-            >
+            <Link href="/documents" className={buttonVariants({ size: "sm", variant: "outline" })}>
               Go to Documents
             </Link>
           }
@@ -186,20 +229,71 @@ export default function ClientDetailPage() {
       ) : null}
 
       {tab === "contacts" ? (
-        <EmptyState
-          icon={Contact}
-          title="No contacts added"
-          description="Add key contacts for this client — directors, next of kin, or instructing parties."
-          action={<Button size="sm">Add contact</Button>}
-        />
+        contacts.length === 0 ? (
+          <EmptyState
+            icon={Contact}
+            title="No contacts added"
+            description="Add key contacts for this client — directors, next of kin, or instructing parties."
+            action={
+              <ContactFormDialog clientId={client.id} onSaved={refetchContacts} trigger={<Button size="sm">Add contact</Button>} />
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-end">
+              <ContactFormDialog clientId={client.id} onSaved={refetchContacts} trigger={<Button size="sm">Add contact</Button>} />
+            </div>
+            <div className="overflow-hidden rounded-none border border-border bg-card">
+              {contacts.map((contact, i) => (
+                <div
+                  key={contact.id}
+                  className={`flex items-center justify-between px-4 py-3 ${i !== contacts.length - 1 ? "border-b border-border" : ""}`}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{contact.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[contact.role, contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => removeContact(contact.id)} aria-label={`Remove ${contact.name}`}>
+                    <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
       ) : null}
 
       {tab === "activity" ? (
-        <EmptyState
-          icon={Activity}
-          title="No recent activity"
-          description="Views, uploads, and edits for this client's documents will appear here."
-        />
+        activityLoading ? (
+          <LoadingState label="Loading activity…" />
+        ) : activityError ? (
+          <InlineError message={activityError} onRetry={refetchActivity} />
+        ) : activity.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No recent activity"
+            description="Views, uploads, and edits for this client's documents will appear here."
+          />
+        ) : (
+          <div className="overflow-hidden rounded-none border border-border bg-card">
+            {activity.map((entry, i) => (
+              <div
+                key={entry.id}
+                className={`flex items-center justify-between px-4 py-3 ${i !== activity.length - 1 ? "border-b border-border" : ""}`}
+              >
+                <div>
+                  <p className="text-sm text-foreground">
+                    {ACTION_LABELS[entry.action] ?? entry.action} · {entry.target}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{entry.isSystem ? "System" : entry.actor}</p>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{entry.timestamp}</p>
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
     </div>
   );

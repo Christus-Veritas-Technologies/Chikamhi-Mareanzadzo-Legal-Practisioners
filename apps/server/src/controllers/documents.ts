@@ -2,6 +2,8 @@ import prisma from "@CMLP/db";
 import type { Context } from "hono";
 import { z } from "zod";
 
+import { buildStorageKey, getDownloadUrl, getUploadUrl, isR2Configured } from "@/lib/r2";
+
 function relativeTime(date: Date) {
   const diffMs = Date.now() - date.getTime();
   const hours = Math.floor(diffMs / 3_600_000);
@@ -15,6 +17,8 @@ function relativeTime(date: Date) {
 export async function listDocuments(c: Context) {
   const search = c.req.query("q");
   const clientId = c.req.query("clientId");
+  const caseId = c.req.query("caseId");
+  const tagId = c.req.query("tagId");
   const status = c.req.query("status");
 
   const documents = await prisma.document.findMany({
@@ -22,7 +26,9 @@ export async function listDocuments(c: Context) {
       deletedAt: null,
       ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
       ...(clientId ? { clientId } : {}),
+      ...(caseId ? { caseId } : {}),
       ...(status ? { status: status as never } : {}),
+      ...(tagId ? { tags: { some: { tagId } } } : {}),
     },
     orderBy: { updatedAt: "desc" },
     include: {
@@ -73,6 +79,8 @@ export async function getDocument(c: Context) {
     },
   });
 
+  const downloadUrl = doc.storageKey ? await getDownloadUrl(doc.storageKey) : null;
+
   return c.json({
     document: {
       id: doc.id,
@@ -84,6 +92,8 @@ export async function getDocument(c: Context) {
       client: doc.client,
       case: doc.case,
       tags: doc.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, colorClass: t.tag.colorClass })),
+      hasStoredFile: Boolean(doc.storageKey),
+      downloadUrl,
     },
   });
 }
@@ -94,6 +104,8 @@ const createDocumentSchema = z.object({
   clientId: z.string().min(1),
   caseId: z.string().optional(),
   folderId: z.string().optional(),
+  contentType: z.string().optional(),
+  sizeBytes: z.number().int().positive().optional(),
 });
 
 export async function createDocument(c: Context) {
@@ -107,10 +119,13 @@ export async function createDocument(c: Context) {
     );
   }
 
+  const { contentType, sizeBytes, ...docFields } = parsed.data;
   const user = c.get("user");
+
   const doc = await prisma.document.create({
     data: {
-      ...parsed.data,
+      ...docFields,
+      sizeBytes,
       status: "DRAFT",
       uploadedById: user.id,
     },
@@ -126,7 +141,17 @@ export async function createDocument(c: Context) {
     },
   });
 
-  return c.json({ document: doc }, 201);
+  // Real R2 upload path: reserve a storage key and hand back a presigned PUT URL the client
+  // can push the actual file bytes to. Falls back to a metadata-only record (uploadUrl: null)
+  // when R2 credentials aren't configured — see @/lib/r2.
+  let uploadUrl: string | null = null;
+  if (isR2Configured) {
+    const storageKey = buildStorageKey(doc.clientId, doc.id, doc.name);
+    await prisma.document.update({ where: { id: doc.id }, data: { storageKey } });
+    uploadUrl = await getUploadUrl(storageKey, contentType);
+  }
+
+  return c.json({ document: doc, uploadUrl }, 201);
 }
 
 export async function deleteDocument(c: Context) {
@@ -168,4 +193,43 @@ export async function restoreDocument(c: Context) {
   });
 
   return c.json({ document: doc });
+}
+
+const addTagSchema = z.object({ tagId: z.string().min(1) });
+
+export async function addDocumentTag(c: Context) {
+  const documentId = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  const parsed = addTagSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "tagId is required." } }, 400);
+  }
+
+  await prisma.documentTag.upsert({
+    where: { documentId_tagId: { documentId, tagId: parsed.data.tagId } },
+    update: {},
+    create: { documentId, tagId: parsed.data.tagId },
+  });
+
+  const tags = await prisma.documentTag.findMany({
+    where: { documentId },
+    include: { tag: true },
+  });
+
+  return c.json({ tags: tags.map((t) => ({ id: t.tag.id, name: t.tag.name, colorClass: t.tag.colorClass })) });
+}
+
+export async function removeDocumentTag(c: Context) {
+  const documentId = c.req.param("id");
+  const tagId = c.req.param("tagId");
+
+  await prisma.documentTag.deleteMany({ where: { documentId, tagId } });
+
+  const tags = await prisma.documentTag.findMany({
+    where: { documentId },
+    include: { tag: true },
+  });
+
+  return c.json({ tags: tags.map((t) => ({ id: t.tag.id, name: t.tag.name, colorClass: t.tag.colorClass })) });
 }

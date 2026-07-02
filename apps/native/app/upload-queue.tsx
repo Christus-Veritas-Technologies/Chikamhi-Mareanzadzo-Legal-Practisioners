@@ -17,15 +17,11 @@ type QueueItem = {
 export default function UploadQueueScreen() {
   const { justAdded } = useLocalSearchParams<{ justAdded?: string }>();
 
+  // scan-assign.tsx only navigates here after its POST /documents call already succeeded,
+  // so anything arriving via justAdded is already filed — no fake in-progress state to fake.
   const [queue, setQueue] = useState<QueueItem[]>(() => {
-    const base: QueueItem[] = [
-      { id: "u1", name: "Scan — Rates Clearance.jpg", state: "done", progress: 100 },
-      { id: "u2", name: "Board Minutes 2024.docx", state: "failed", progress: 42 },
-    ];
-    if (justAdded) {
-      base.unshift({ id: "u0", name: justAdded, state: "uploading", progress: 12 });
-    }
-    return base;
+    if (!justAdded) return [];
+    return [{ id: "u0", name: justAdded, state: "done", progress: 100 }];
   });
 
   function retry(id: string) {

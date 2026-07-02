@@ -17,23 +17,59 @@ type DocumentRow = {
   fileType: string;
   status: string;
   client: { id: string; name: string } | null;
+  case: { id: string; title: string } | null;
 };
 
-const RECENT_SEARCHES = ["deed of sale 4471", "ncube affidavit"];
-const FILTER_CHIPS = ["Client", "Case", "Tag"] as const;
+type ClientOption = { id: string; name: string };
+type CaseOption = { id: string; title: string };
+type TagOption = { id: string; name: string };
+
+type FilterKind = "client" | "case" | "tag" | null;
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"pdf" | null>("pdf");
+  const [typeFilter, setTypeFilter] = useState<"pdf" | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [tagId, setTagId] = useState<string | null>(null);
+  const [openPicker, setOpenPicker] = useState<FilterKind>(null);
+  // Real recent-search history, built from what's actually been searched this session —
+  // no seeded example terms.
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  const path = query.trim() ? `/documents?q=${encodeURIComponent(query.trim())}` : "/documents";
+  const params = new URLSearchParams();
+  if (query.trim()) params.set("q", query.trim());
+  if (clientId) params.set("clientId", clientId);
+  if (caseId) params.set("caseId", caseId);
+  if (tagId) params.set("tagId", tagId);
+  const search = params.toString();
+  const path = search ? `/documents?${search}` : "/documents";
+
   const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>(path, [path]);
   const documents = data?.documents ?? [];
+
+  const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
+  const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const { data: tagsData } = useApi<{ tags: TagOption[] }>("/tags");
+  const clients = clientsData?.clients ?? [];
+  const cases = casesData?.cases ?? [];
+  const tags = tagsData?.tags ?? [];
 
   const results = useMemo(() => {
     if (!typeFilter) return documents;
     return documents.filter((doc) => doc.fileType === typeFilter);
   }, [documents, typeFilter]);
+
+  function submitSearch(term: string) {
+    setQuery(term);
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => [trimmed, ...prev.filter((t) => t !== trimmed)].slice(0, 5));
+  }
+
+  const selectedClientName = clients.find((c) => c.id === clientId)?.name;
+  const selectedCaseTitle = cases.find((c) => c.id === caseId)?.title;
+  const selectedTagName = tags.find((t) => t.id === tagId)?.name;
 
   return (
     <Container className="px-5 pt-3">
@@ -45,6 +81,8 @@ export default function SearchScreen() {
           placeholder="Search name or contents…"
           value={query}
           onChangeText={setQuery}
+          onSubmitEditing={() => submitSearch(query)}
+          returnKeyType="search"
           className="flex-1 text-sm text-foreground"
           placeholderTextColor="#8A8378"
         />
@@ -60,25 +98,133 @@ export default function SearchScreen() {
               <Text className="text-xs font-medium text-brand-foreground">Type: PDF</Text>
               <Ionicons name="close" size={12} color="#211D17" />
             </Pressable>
-          ) : null}
-          {FILTER_CHIPS.map((chip) => (
-            <View key={chip} className="rounded-full border border-border px-3 py-1">
-              <Text className="text-xs text-muted-foreground">{chip}</Text>
-            </View>
-          ))}
+          ) : (
+            <Pressable
+              onPress={() => setTypeFilter("pdf")}
+              className="rounded-full border border-border px-3 py-1"
+            >
+              <Text className="text-xs text-muted-foreground">Type: PDF</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            onPress={() => setOpenPicker(openPicker === "client" ? null : "client")}
+            className={`flex-row items-center gap-1 rounded-full border px-3 py-1 ${clientId || openPicker === "client" ? "border-brand bg-brand-muted" : "border-border"}`}
+          >
+            <Text className={`text-xs ${clientId ? "font-medium text-brand-foreground" : "text-muted-foreground"}`}>
+              {selectedClientName ?? "Client"}
+            </Text>
+            {clientId ? (
+              <Ionicons
+                name="close"
+                size={12}
+                color="#211D17"
+                onPress={() => {
+                  setClientId(null);
+                  setOpenPicker(null);
+                }}
+              />
+            ) : null}
+          </Pressable>
+
+          <Pressable
+            onPress={() => setOpenPicker(openPicker === "case" ? null : "case")}
+            className={`flex-row items-center gap-1 rounded-full border px-3 py-1 ${caseId || openPicker === "case" ? "border-brand bg-brand-muted" : "border-border"}`}
+          >
+            <Text className={`text-xs ${caseId ? "font-medium text-brand-foreground" : "text-muted-foreground"}`}>
+              {selectedCaseTitle ?? "Case"}
+            </Text>
+            {caseId ? (
+              <Ionicons
+                name="close"
+                size={12}
+                color="#211D17"
+                onPress={() => {
+                  setCaseId(null);
+                  setOpenPicker(null);
+                }}
+              />
+            ) : null}
+          </Pressable>
+
+          <Pressable
+            onPress={() => setOpenPicker(openPicker === "tag" ? null : "tag")}
+            className={`flex-row items-center gap-1 rounded-full border px-3 py-1 ${tagId || openPicker === "tag" ? "border-brand bg-brand-muted" : "border-border"}`}
+          >
+            <Text className={`text-xs ${tagId ? "font-medium text-brand-foreground" : "text-muted-foreground"}`}>
+              {selectedTagName ?? "Tag"}
+            </Text>
+            {tagId ? (
+              <Ionicons
+                name="close"
+                size={12}
+                color="#211D17"
+                onPress={() => {
+                  setTagId(null);
+                  setOpenPicker(null);
+                }}
+              />
+            ) : null}
+          </Pressable>
         </View>
       </ScrollView>
 
-      {!query && (
+      {openPicker ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+          <View className="flex-row gap-2">
+            {openPicker === "client" &&
+              clients.map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => {
+                    setClientId(c.id);
+                    setOpenPicker(null);
+                  }}
+                  className="rounded-full border border-border px-3 py-1"
+                >
+                  <Text className="text-xs text-foreground">{c.name}</Text>
+                </Pressable>
+              ))}
+            {openPicker === "case" &&
+              cases.map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => {
+                    setCaseId(c.id);
+                    setOpenPicker(null);
+                  }}
+                  className="rounded-full border border-border px-3 py-1"
+                >
+                  <Text className="text-xs text-foreground">{c.title}</Text>
+                </Pressable>
+              ))}
+            {openPicker === "tag" &&
+              tags.map((t) => (
+                <Pressable
+                  key={t.id}
+                  onPress={() => {
+                    setTagId(t.id);
+                    setOpenPicker(null);
+                  }}
+                  className="rounded-full border border-border px-3 py-1"
+                >
+                  <Text className="text-xs text-foreground">{t.name}</Text>
+                </Pressable>
+              ))}
+          </View>
+        </ScrollView>
+      ) : null}
+
+      {!query && recentSearches.length > 0 && (
         <View className="mt-5">
           <Text className="text-[10px] tracking-wide text-muted-foreground uppercase">
             Recent searches
           </Text>
           <View className="mt-2 gap-2">
-            {RECENT_SEARCHES.map((term) => (
+            {recentSearches.map((term) => (
               <Pressable
                 key={term}
-                onPress={() => setQuery(term)}
+                onPress={() => submitSearch(term)}
                 className="flex-row items-center gap-2"
               >
                 <Ionicons name="time-outline" size={14} color="#8A8378" />

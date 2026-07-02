@@ -20,6 +20,8 @@ export type AuthUser = {
   username: string;
   role: string;
   isActive: boolean;
+  avatarUrl?: string | null;
+  notifications?: { caseUpload: boolean; ocrComplete: boolean; weeklyDigest: boolean };
 };
 
 type AuthContextValue = {
@@ -32,6 +34,7 @@ type AuthContextValue = {
   signIn: (username: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -89,6 +92,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const { user: me } = await apiFetch<{ user: AuthUser }>("/auth/me", { token });
+      setUser(me);
+    } catch {
+      // Keep the last known user if the refresh fails — not worth signing the user out for.
+    }
+  }, [token]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -100,8 +113,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signIn,
       signOut,
       clearError,
+      refreshUser,
     }),
-    [user, token, isLoading, isSigningIn, error, signIn, signOut, clearError],
+    [user, token, isLoading, isSigningIn, error, signIn, signOut, clearError, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

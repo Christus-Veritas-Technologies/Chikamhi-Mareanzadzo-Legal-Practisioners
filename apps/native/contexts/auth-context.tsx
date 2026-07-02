@@ -24,6 +24,7 @@ export type AuthUser = {
 
 type AuthContextValue = {
   user: AuthUser | null;
+  token: string | null;
   isLoading: boolean;
   isSigningIn: boolean;
   error: string | null;
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!storedToken) return;
         const { user: me } = await apiFetch<{ user: AuthUser }>("/auth/me", { token: storedToken });
         setUser(me);
+        setToken(storedToken);
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
       } finally {
@@ -60,12 +63,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsSigningIn(true);
     setError(null);
     try {
-      const { token, user: newUser } = await apiFetch<{ token: string; user: AuthUser }>(
+      const { token: newToken, user: newUser } = await apiFetch<{ token: string; user: AuthUser }>(
         "/auth/sign-in",
         { method: "POST", body: { username, password } },
       );
-      await SecureStore.setItemAsync(TOKEN_KEY, token);
+      await SecureStore.setItemAsync(TOKEN_KEY, newToken);
       setUser(newUser);
+      setToken(newToken);
       return true;
     } catch (err) {
       setError(
@@ -80,6 +84,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     setUser(null);
+    setToken(null);
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -87,6 +92,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      token,
       isLoading,
       isSigningIn,
       error,
@@ -95,7 +101,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signOut,
       clearError,
     }),
-    [user, isLoading, isSigningIn, error, signIn, signOut, clearError],
+    [user, token, isLoading, isSigningIn, error, signIn, signOut, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

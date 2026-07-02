@@ -6,6 +6,7 @@ import { LayoutGrid, List, Plus, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { ClientFormDialog } from "@/components/client-form-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { useApi } from "@/hooks/use-api";
@@ -65,10 +66,16 @@ export default function ClientsPage() {
           <Button variant="outline" size="icon" aria-label="Grid view">
             <LayoutGrid />
           </Button>
-          <Button size="lg">
-            <Plus />
-            New client
-          </Button>
+          <ClientFormDialog
+            mode="create"
+            onSaved={refetch}
+            trigger={
+              <Button size="lg">
+                <Plus />
+                New client
+              </Button>
+            }
+          />
         </div>
       </div>
 

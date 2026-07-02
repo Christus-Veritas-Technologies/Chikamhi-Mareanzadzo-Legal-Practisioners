@@ -107,12 +107,14 @@ WORKDIR /app/apps/server
 # the database, which only the running container is guaranteed to be. It's a no-op if
 # everything's already up to date, so this is safe on every restart.
 #
-# Deliberately NOT running `db:seed` here — that script (packages/db/src/seed.ts) seeds full
-# demo data (clients, cases, documents) and isn't written to be idempotent re-run-safe the way
-# a minimal "seed the admin account only" script would be. Run it manually, once, the first
-# time you stand up a new environment:
-#   docker exec <container> sh -c "cd /app/packages/db && bun run src/seed.ts"
+# packages/db/src/seed.ts (the "db:seed" script) is genuinely idempotent — every table it
+# touches is upserted by a natural unique key (users by username, folders/tags by name, cases
+# by caseNumber) or explicitly find-or-create/find-or-skip (clients by name, documents by
+# name+clientId, guarding the audit-log insert behind the same check) — so it's safe to run on
+# every container start, not just the first. It seeds the mockup demo roster/data (including
+# the mareanadzo/12345678 admin account) — remove this line once real firm data replaces the
+# demo set, if you don't want it re-asserting those demo rows on every deploy.
 #
 # `exec` replaces the shell with the bun process so it keeps receiving signals (e.g. SIGTERM)
 # directly for a clean shutdown, instead of going to the shell.
-CMD ["sh", "-c", "cd /app/packages/db && pnpm exec prisma migrate deploy && cd /app/apps/server && exec bun run dist/index.mjs"]
+CMD ["sh", "-c", "cd /app/packages/db && pnpm exec prisma migrate deploy && bun run src/seed.ts && cd /app/apps/server && exec bun run dist/index.mjs"]

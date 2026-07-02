@@ -12,4 +12,12 @@
   --color-brand: #c89a54;
   --color-brand-foreground: #211d17;
   --color-brand-muted: #f3e4c6;
+
+  /* Aliases onto heroui-native's own tokens (see node_modules/heroui-native/lib/module/styles/variables.css)
+     so screen code can use shadcn-style names consistently with the web app. */
+  --color-muted-foreground: var(--muted);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-foreground);
+  --color-primary: var(--foreground);
+  --color-primary-foreground: var(--background);
 }

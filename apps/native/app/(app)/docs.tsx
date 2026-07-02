@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useThemeColor } from "heroui-native";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -11,7 +11,9 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
 import { useAppDrawer } from "@/contexts/drawer-context";
+import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/api";
 import { formatStatus } from "@/lib/format-status";
 
 type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
@@ -44,6 +46,92 @@ export default function DocsScreen() {
 
   const foreground = useThemeColor("foreground");
   const { open } = useAppDrawer();
+  const { token } = useAuth();
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPicker, setBulkPicker] = useState<"tag" | "move" | null>(null);
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
+
+  function toggleSelectMode() {
+    setSelectMode((s) => !s);
+    setSelected(new Set());
+    setBulkPicker(null);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function applyBulkTag(bulkTagId: string) {
+    setBulkPicker(null);
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/tag", {
+        method: "POST",
+        body: { documentIds: Array.from(selected), tagId: bulkTagId },
+        token,
+      });
+      setSelected(new Set());
+      setSelectMode(false);
+      refetch();
+    } catch {
+      Alert.alert("Couldn't apply tag", "Please try again.");
+    } finally {
+      setIsBulkWorking(false);
+    }
+  }
+
+  async function applyBulkMove(bulkCaseId: string) {
+    setBulkPicker(null);
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/move", {
+        method: "POST",
+        body: { documentIds: Array.from(selected), caseId: bulkCaseId },
+        token,
+      });
+      setSelected(new Set());
+      setSelectMode(false);
+      refetch();
+    } catch {
+      Alert.alert("Couldn't move documents", "Please try again.");
+    } finally {
+      setIsBulkWorking(false);
+    }
+  }
+
+  function confirmBulkDelete() {
+    Alert.alert(`Delete ${selected.size} document(s)?`, "They'll be moved to Trash.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setIsBulkWorking(true);
+          try {
+            await apiFetch("/documents/bulk/delete", {
+              method: "POST",
+              body: { documentIds: Array.from(selected) },
+              token,
+            });
+            setSelected(new Set());
+            setSelectMode(false);
+            refetch();
+          } catch {
+            Alert.alert("Couldn't delete documents", "Please try again.");
+          } finally {
+            setIsBulkWorking(false);
+          }
+        },
+      },
+    ]);
+  }
 
   const params = new URLSearchParams();
   if (clientId) params.set("clientId", clientId);
@@ -84,7 +172,8 @@ export default function DocsScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <View className="flex-1">
+      <Container className="px-5 pt-3">
       <View className="flex-row items-center justify-between">
         <View>
           <Text className="font-serif text-xl font-semibold text-foreground">Documents</Text>
@@ -93,9 +182,14 @@ export default function DocsScreen() {
             {hasFilters ? " matching filters" : " across all clients and cases"}
           </Text>
         </View>
-        <Pressable hitSlop={8} onPress={open}>
-          <Ionicons name="menu" size={22} color={foreground} />
-        </Pressable>
+        <View className="flex-row items-center gap-4">
+          <Pressable hitSlop={8} onPress={toggleSelectMode}>
+            <Text className="text-xs font-medium text-brand">{selectMode ? "Cancel" : "Select"}</Text>
+          </Pressable>
+          <Pressable hitSlop={8} onPress={open}>
+            <Ionicons name="menu" size={22} color={foreground} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
@@ -262,21 +356,46 @@ export default function DocsScreen() {
               description={hasFilters ? "Try a different filter combination." : "Documents you scan or upload will show up here."}
             />
           ) : (
-            documents.map((doc) => (
-              <Link key={doc.id} href={`/doc/${doc.id}`} asChild>
-                <Pressable className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <View className="min-w-0 flex-1 pr-2">
-                    <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                      {doc.name}
-                    </Text>
-                    <Text numberOfLines={1} className="text-xs text-muted-foreground">
-                      {doc.case?.title ?? doc.client?.name ?? "—"} · {doc.modified}
-                    </Text>
+            documents.map((doc) =>
+              selectMode ? (
+                <Pressable
+                  key={doc.id}
+                  onPress={() => toggleSelected(doc.id)}
+                  className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3"
+                >
+                  <View className="flex-row items-center gap-2.5 min-w-0 flex-1 pr-2">
+                    <Ionicons
+                      name={selected.has(doc.id) ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={selected.has(doc.id) ? "#C99A3F" : "#8A8378"}
+                    />
+                    <View className="min-w-0 flex-1">
+                      <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                        {doc.name}
+                      </Text>
+                      <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                        {doc.case?.title ?? doc.client?.name ?? "—"} · {doc.modified}
+                      </Text>
+                    </View>
                   </View>
                   <StatusPill status={formatStatus(doc.status)} />
                 </Pressable>
-              </Link>
-            ))
+              ) : (
+                <Link key={doc.id} href={`/doc/${doc.id}`} asChild>
+                  <Pressable className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3">
+                    <View className="min-w-0 flex-1 pr-2">
+                      <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                        {doc.name}
+                      </Text>
+                      <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                        {doc.case?.title ?? doc.client?.name ?? "—"} · {doc.modified}
+                      </Text>
+                    </View>
+                    <StatusPill status={formatStatus(doc.status)} />
+                  </Pressable>
+                </Link>
+              ),
+            )
           )}
           {data?.pagination ? (
             <LoadMoreButton
@@ -288,7 +407,59 @@ export default function DocsScreen() {
           ) : null}
         </View>
       )}
-    </Container>
+      </Container>
+
+      {selectMode && selected.size > 0 ? (
+        <View className="absolute right-0 bottom-0 left-0 gap-2 border-t border-border bg-background px-5 pt-2 pb-4">
+          {bulkPicker ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-1">
+              <View className="flex-row gap-2">
+                {bulkPicker === "tag" &&
+                  tags.map((t) => (
+                    <Pressable
+                      key={t.id}
+                      onPress={() => applyBulkTag(t.id)}
+                      className="rounded-full border border-border px-3 py-1"
+                    >
+                      <Text className="text-xs text-foreground">{t.name}</Text>
+                    </Pressable>
+                  ))}
+                {bulkPicker === "move" &&
+                  (casesData?.cases ?? []).map((c) => (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => applyBulkMove(c.id)}
+                      className="rounded-full border border-border px-3 py-1"
+                    >
+                      <Text className="text-xs text-foreground">{c.title}</Text>
+                    </Pressable>
+                  ))}
+              </View>
+            </ScrollView>
+          ) : null}
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs font-medium text-foreground">{selected.size} selected</Text>
+            <View className="flex-row gap-4">
+              <Pressable
+                disabled={isBulkWorking}
+                onPress={() => setBulkPicker(bulkPicker === "tag" ? null : "tag")}
+              >
+                <Text className="text-xs font-medium text-brand">Tag</Text>
+              </Pressable>
+              <Pressable
+                disabled={isBulkWorking}
+                onPress={() => setBulkPicker(bulkPicker === "move" ? null : "move")}
+              >
+                <Text className="text-xs font-medium text-brand">Move</Text>
+              </Pressable>
+              <Pressable disabled={isBulkWorking} onPress={confirmBulkDelete}>
+                <Text className="text-xs font-medium text-destructive">Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 

@@ -1,6 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -8,8 +9,18 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { StatusPill } from "@/components/status-pill";
+import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/api";
 import { formatStatus } from "@/lib/format-status";
+
+type Deadline = {
+  id: string;
+  title: string;
+  dueAt: string;
+  notes: string | null;
+  completedAt: string | null;
+};
 
 const DOC_TABS = [
   { value: "all", label: "All" },
@@ -38,8 +49,49 @@ export default function CaseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [docFilter, setDocFilter] = useState<DocFilter>("all");
 
+  const { token } = useAuth();
   const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${id}`);
   const matter = data?.case;
+
+  const { data: deadlinesData, refetch: refetchDeadlines } = useApi<{ deadlines: Deadline[] }>(
+    `/deadlines?caseId=${id}`,
+  );
+  const deadlines = useMemo(
+    () => [...(deadlinesData?.deadlines ?? [])].sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
+    [deadlinesData],
+  );
+  const [isAddingDeadline, setIsAddingDeadline] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDue, setNewDue] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function addDeadline() {
+    if (!newTitle.trim() || !newDue.trim() || !id) return;
+    setIsSaving(true);
+    try {
+      await apiFetch("/deadlines", {
+        method: "POST",
+        body: { caseId: id, title: newTitle.trim(), dueAt: newDue.trim() },
+        token,
+      });
+      setNewTitle("");
+      setNewDue("");
+      setIsAddingDeadline(false);
+      refetchDeadlines();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function toggleComplete(deadlineId: string, completed: boolean) {
+    await apiFetch(`/deadlines/${deadlineId}`, { method: "PATCH", body: { completed }, token });
+    refetchDeadlines();
+  }
+
+  async function removeDeadline(deadlineId: string) {
+    await apiFetch(`/deadlines/${deadlineId}`, { method: "DELETE", token });
+    refetchDeadlines();
+  }
 
   const filteredDocs = useMemo(() => {
     const documents = matter?.documents ?? [];
@@ -140,6 +192,79 @@ export default function CaseDetailScreen() {
           ))
         )}
       </View>
+
+      <View className="mt-6 flex-row items-center justify-between">
+        <Text className="text-sm font-medium text-foreground">Deadlines</Text>
+        <Pressable onPress={() => setIsAddingDeadline((s) => !s)} hitSlop={8}>
+          <Text className="text-xs font-medium text-brand">{isAddingDeadline ? "Cancel" : "+ Add"}</Text>
+        </Pressable>
+      </View>
+
+      {isAddingDeadline ? (
+        <View className="mt-2 gap-2 rounded-xl border border-dashed border-border p-3">
+          <TextInput
+            autoFocus
+            value={newTitle}
+            onChangeText={setNewTitle}
+            placeholder="e.g. File heads of argument"
+            placeholderTextColor="#8A8378"
+            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+          />
+          <TextInput
+            value={newDue}
+            onChangeText={setNewDue}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor="#8A8378"
+            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+          />
+          <Pressable
+            onPress={addDeadline}
+            disabled={isSaving || !newTitle.trim() || !newDue.trim()}
+            className="items-center rounded-xl bg-primary py-2"
+          >
+            <Text className="text-sm font-semibold text-primary-foreground">
+              {isSaving ? "Adding…" : "Add deadline"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {deadlines.length === 0 ? (
+        <Text className="mt-2 text-xs text-muted-foreground">No deadlines set for this case.</Text>
+      ) : (
+        <View className="mt-2 gap-2">
+          {deadlines.map((d) => {
+            const isOverdue = !d.completedAt && new Date(d.dueAt) < new Date();
+            return (
+              <View
+                key={d.id}
+                className="flex-row items-start justify-between gap-2 rounded-xl border border-border px-3 py-2.5"
+              >
+                <View className="flex-1 flex-row items-start gap-2">
+                  <Pressable
+                    onPress={() => toggleComplete(d.id, !d.completedAt)}
+                    className={`mt-0.5 h-4 w-4 items-center justify-center rounded-full border ${d.completedAt ? "border-success bg-success" : "border-input"}`}
+                  >
+                    {d.completedAt ? <Ionicons name="checkmark" size={10} color="white" /> : null}
+                  </Pressable>
+                  <View className="flex-1">
+                    <Text className={`text-xs font-medium ${d.completedAt ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                      {d.title}
+                    </Text>
+                    <Text className={`text-[11px] ${isOverdue ? "font-medium text-destructive" : "text-muted-foreground"}`}>
+                      {new Date(d.dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {isOverdue ? " · Overdue" : ""}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable onPress={() => removeDeadline(d.id)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={14} color="#8A8378" />
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       <Text className="mt-6 mb-2 text-sm font-medium text-foreground">Timeline</Text>
       {timeline.length === 0 ? (

@@ -79,7 +79,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading clients…" />
         ) : error ? (

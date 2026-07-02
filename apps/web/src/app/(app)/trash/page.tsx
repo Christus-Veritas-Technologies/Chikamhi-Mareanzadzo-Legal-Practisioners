@@ -65,7 +65,7 @@ export default function TrashPage() {
         <h1 className="font-serif text-2xl font-semibold text-foreground">Trash</h1>
       </div>
 
-      <div className="flex items-start gap-2 rounded-none border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foreground">
         <Info className="mt-0.5 size-4 shrink-0 text-warning" />
         <p>
           Deleted documents are retained for <span className="font-semibold">30 days</span>, then permanently purged
@@ -73,7 +73,7 @@ export default function TrashPage() {
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading trash…" />
         ) : error ? (

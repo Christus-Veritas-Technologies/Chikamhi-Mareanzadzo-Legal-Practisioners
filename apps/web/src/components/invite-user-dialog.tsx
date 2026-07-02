@@ -81,7 +81,7 @@ export function InviteUserDialog({ onSaved }: { onSaved: () => void }) {
                 asked to sign in with them.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-2 rounded-none border border-border bg-muted/30 p-3 text-xs">
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Username</span>
                 <span className="font-mono text-foreground">{created.username}</span>
@@ -130,7 +130,7 @@ export function InviteUserDialog({ onSaved }: { onSaved: () => void }) {
                   id="invite-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
-                  className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                  className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                 >
                   {ROLES.map((r) => (
                     <option key={r} value={r}>

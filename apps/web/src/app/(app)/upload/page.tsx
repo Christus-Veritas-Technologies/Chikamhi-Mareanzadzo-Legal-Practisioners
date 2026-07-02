@@ -156,11 +156,11 @@ export default function UploadPage() {
         </p>
       </div>
 
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-none border border-dashed border-border bg-muted/30 px-6 py-12 text-center hover:bg-muted/50">
+      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center hover:bg-muted/50">
         <UploadCloud className="size-6 text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">Drag documents here</p>
         <p className="text-xs text-muted-foreground">PDF, DOCX, XLSX, JPG or PNG · up to 50 MB each</p>
-        <span className="mt-2 inline-flex h-8 items-center rounded-none bg-primary px-3 text-xs font-medium text-primary-foreground">
+        <span className="mt-2 inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground">
           Browse files
         </span>
         <input
@@ -175,7 +175,7 @@ export default function UploadPage() {
       </label>
 
       {queue.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-none border border-border px-6 py-12 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border px-6 py-12 text-center">
           <FileText className="size-5 text-muted-foreground" />
           <p className="text-sm font-medium text-foreground">No files queued</p>
           <p className="text-xs text-muted-foreground">Drag documents above, or browse files to get started.</p>
@@ -191,7 +191,7 @@ export default function UploadPage() {
 
           <div className="flex flex-col gap-2">
             {queue.map((item) => (
-              <div key={item.id} className="rounded-none border border-border p-3">
+              <div key={item.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" />
                   <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -208,7 +208,7 @@ export default function UploadPage() {
                 </div>
 
                 {item.state === "failed" ? (
-                  <div className="mt-2 flex items-start justify-between gap-3 rounded-none border border-destructive/30 bg-destructive/10 px-2.5 py-2">
+                  <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                       <div>
@@ -226,7 +226,7 @@ export default function UploadPage() {
                     <select
                       value={item.clientId ?? ""}
                       onChange={(e) => updateItem(item.id, { clientId: e.target.value, caseId: undefined })}
-                      className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                      className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">Select client…</option>
                       {clients.map((c) => (
@@ -238,7 +238,7 @@ export default function UploadPage() {
                     <select
                       value={item.caseId ?? ""}
                       onChange={(e) => updateItem(item.id, { caseId: e.target.value })}
-                      className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                      className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                       disabled={!item.clientId}
                     >
                       <option value="">Select case…</option>
@@ -282,7 +282,7 @@ export default function UploadPage() {
                         Add tag
                       </button>
                       {item.tagPickerOpen ? (
-                        <div className="absolute top-full left-0 z-10 mt-1 flex max-h-40 w-40 flex-col gap-0.5 overflow-y-auto rounded-none border border-border bg-popover p-1 shadow-md">
+                        <div className="absolute top-full left-0 z-10 mt-1 flex max-h-40 w-40 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">
                           {tags.length === 0 ? (
                             <p className="px-2 py-1 text-[11px] text-muted-foreground">No tags yet.</p>
                           ) : (
@@ -292,7 +292,7 @@ export default function UploadPage() {
                                 type="button"
                                 onClick={() => toggleTag(item, tag.id)}
                                 className={cn(
-                                  "flex items-center justify-between rounded-none px-2 py-1 text-left text-[11px] hover:bg-muted/60",
+                                  "flex items-center justify-between rounded-md px-2 py-1 text-left text-[11px] hover:bg-muted/60",
                                   item.tagIds.includes(tag.id) && "font-semibold text-brand",
                                 )}
                               >

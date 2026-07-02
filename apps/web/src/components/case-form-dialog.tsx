@@ -99,7 +99,7 @@ export function CaseFormDialog({ trigger, clientId, onSaved }: CaseFormDialogPro
               id="case-lead"
               value={leadAttorneyId}
               onChange={(e) => setLeadAttorneyId(e.target.value)}
-              className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+              className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
             >
               <option value="">Unassigned</option>
               {users.map((u) => (

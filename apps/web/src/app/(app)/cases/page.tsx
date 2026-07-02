@@ -80,7 +80,7 @@ export default function CasesPage() {
 
       <SegmentedTabs tabs={STATUS_TABS} value={status} onChange={setStatus} />
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading cases…" />
         ) : error ? (

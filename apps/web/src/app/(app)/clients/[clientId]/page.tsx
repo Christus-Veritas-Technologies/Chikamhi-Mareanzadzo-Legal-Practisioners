@@ -245,7 +245,7 @@ export default function ClientDetailPage() {
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-none border border-border bg-card">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
@@ -303,7 +303,7 @@ export default function ClientDetailPage() {
             <div className="flex justify-end">
               <ContactFormDialog clientId={client.id} onSaved={refetchContacts} trigger={<Button size="sm">Add contact</Button>} />
             </div>
-            <div className="overflow-hidden rounded-none border border-border bg-card">
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
               {contacts.map((contact, i) => (
                 <div
                   key={contact.id}
@@ -337,7 +337,7 @@ export default function ClientDetailPage() {
             description="Views, uploads, and edits for this client's documents will appear here."
           />
         ) : (
-          <div className="overflow-hidden rounded-none border border-border bg-card">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             {activity.map((entry, i) => (
               <div
                 key={entry.id}

@@ -134,7 +134,7 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">Manage your profile, password, and notifications.</p>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-none border border-border bg-card p-5">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
         <div className="flex items-center gap-4">
           {user.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -185,7 +185,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-none border border-border bg-card p-5">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
         <p className="font-serif text-sm font-semibold text-foreground">Change password</p>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="settings-current-password">Current password</Label>
@@ -228,7 +228,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-none border border-border bg-card p-5">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
         <p className="font-serif text-sm font-semibold text-foreground">Notifications</p>
         {NOTIF_ITEMS.map((item) => (
           <div key={item.key} className="flex items-center justify-between gap-4">

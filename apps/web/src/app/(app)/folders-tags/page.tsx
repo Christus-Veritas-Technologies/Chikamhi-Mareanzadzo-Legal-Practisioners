@@ -115,7 +115,7 @@ export default function FoldersTagsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {folders.map((folder) => (
-              <div key={folder.id} className="rounded-none border border-border bg-card p-4">
+              <div key={folder.id} className="rounded-xl border border-border bg-card p-4">
                 <FolderPlus className="size-4 text-brand" />
                 <p className="mt-2 text-sm font-medium text-foreground">{folder.name}</p>
                 <p className="text-xs text-muted-foreground">{folder.documentCount} documents</p>
@@ -123,14 +123,14 @@ export default function FoldersTagsPage() {
             ))}
 
             {!isAdmin ? null : addingFolder ? (
-              <div className="flex flex-col gap-2 rounded-none border border-dashed border-border p-4">
+              <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-4">
                 <input
                   autoFocus
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addFolder()}
                   placeholder="Folder name"
-                  className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                  className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                 />
                 <button
                   type="button"
@@ -145,7 +145,7 @@ export default function FoldersTagsPage() {
               <button
                 type="button"
                 onClick={() => setAddingFolder(true)}
-                className="flex flex-col items-center justify-center gap-1 rounded-none border border-dashed border-border p-4 text-muted-foreground hover:text-foreground"
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-4 text-muted-foreground hover:text-foreground"
               >
                 <Plus className="size-4" />
                 <span className="text-xs">New folder</span>
@@ -181,7 +181,7 @@ export default function FoldersTagsPage() {
             description="Tags help you find documents across clients and cases."
           />
         ) : (
-          <div className="overflow-hidden rounded-none border border-border bg-card">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             {tags.map((tag, i) => (
               <div
                 key={tag.id}
@@ -196,7 +196,7 @@ export default function FoldersTagsPage() {
                       onChange={(e) => setEditingTagName(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && saveTagName()}
                       onBlur={saveTagName}
-                      className="h-6 rounded-none border border-input bg-background px-1.5 text-sm text-foreground"
+                      className="py-1 rounded-lg border border-input bg-background px-1.5 text-sm text-foreground"
                     />
                   ) : (
                     <span className="text-sm text-foreground">{tag.name}</span>

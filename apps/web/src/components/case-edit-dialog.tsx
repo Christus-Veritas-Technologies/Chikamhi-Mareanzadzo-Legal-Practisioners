@@ -85,7 +85,7 @@ export function CaseEditDialog({ trigger, caseId, initial, onSaved }: CaseEditDi
               id="case-status"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+              className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -112,7 +112,7 @@ export function CaseEditDialog({ trigger, caseId, initial, onSaved }: CaseEditDi
               id="case-lead-edit"
               value={leadAttorneyId}
               onChange={(e) => setLeadAttorneyId(e.target.value)}
-              className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+              className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
             >
               <option value="">Unassigned</option>
               {users.map((u) => (

@@ -61,7 +61,7 @@ export function NotificationBell() {
         type="button"
         aria-label="Notifications"
         onClick={() => setOpen((o) => !o)}
-        className="relative flex size-8 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="relative flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <Bell className="size-4" />
         {unreadCount > 0 ? (
@@ -70,7 +70,7 @@ export function NotificationBell() {
       </button>
 
       {open ? (
-        <div className="absolute top-full right-0 z-50 mt-2 w-80 rounded-none border border-border bg-popover shadow-md">
+        <div className="absolute top-full right-0 z-50 mt-2 w-80 rounded-xl border border-border bg-popover shadow-md">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
             <p className="text-xs font-medium text-foreground">
               Notifications{unreadCount > 0 ? ` (${unreadCount})` : ""}

@@ -131,7 +131,7 @@ export default function AuditLogPage() {
         <select
           value={actorFilter}
           onChange={(e) => setActorFilter(e.target.value)}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All actors</option>
           {actors.map(([id, name]) => (
@@ -143,7 +143,7 @@ export default function AuditLogPage() {
         <select
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All actions</option>
           {actions.map((a) => (
@@ -154,7 +154,7 @@ export default function AuditLogPage() {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading audit log…" />
         ) : error ? (

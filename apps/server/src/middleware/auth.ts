@@ -54,7 +54,7 @@ export async function requireAuth(c: Context, next: Next) {
 }
 
 // Role gate — chain after requireAuth on any route that should be restricted to specific
-// roles (e.g. .use("*", requireAuth, requireRole("ADMIN"))). Client-side nav hiding is
+// roles (e.g. .use("*", requireAuth, requireRole("ATTORNEY"))). Client-side nav hiding is
 // cosmetic only; this is what actually stops a non-admin from calling the endpoint directly.
 export function requireRole(...roles: string[]) {
   return async function (c: Context, next: Next) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { Button } from "@CMLP/ui/components/button";
+import { buttonVariants } from "@CMLP/ui/components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
 import { Plus, Search } from "lucide-react";
+import Link from "next/link";
 
 export function AppTopbar() {
   return (
@@ -16,10 +17,10 @@ export function AppTopbar() {
         </InputGroup>
       </div>
       <div className="flex-1" />
-      <Button size="lg">
+      <Link href="/upload" className={buttonVariants({ size: "lg" })}>
         <Plus />
         Upload
-      </Button>
+      </Link>
     </header>
   );
 }

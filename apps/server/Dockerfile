@@ -60,6 +60,15 @@ COPY packages/env/package.json packages/env/
 COPY packages/db/package.json packages/db/
 COPY apps/server/package.json apps/server/
 
+# packages/db/package.json has "postinstall": "prisma generate", which pnpm runs
+# automatically as part of `pnpm install` below — before the "source after install" copy
+# further down would otherwise land the schema. Without the schema present at install time,
+# that postinstall fails with "Could not find Prisma Schema" and takes the whole install down
+# with it. Bring just the schema + migrations + prisma.config.ts in now (cheap, and these
+# change far less often than application code, so this barely dents layer-cache reuse).
+COPY packages/db/prisma.config.ts packages/db/
+COPY packages/db/prisma/ packages/db/prisma/
+
 # prisma.config.ts reads DATABASE_URL through prisma/config's `env()` helper, which throws if
 # the variable is missing entirely — so even `prisma generate`, which never touches a real
 # database, fails at build time without *something* set here. Pass the real value at container

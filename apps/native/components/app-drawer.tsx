@@ -23,16 +23,17 @@ type NavItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   path: string;
-  adminOnly?: boolean;
+  /** Attorneys and paralegals have equal access everywhere except these two. */
+  attorneyOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { icon: "people-outline", label: "Clients", path: "/clients" },
   { icon: "pricetags-outline", label: "Folders & Tags", path: "/folders-tags" },
   { icon: "download-outline", label: "Downloads", path: "/downloads" },
-  { icon: "time-outline", label: "Audit Log", path: "/audit-log" },
-  { icon: "people-circle-outline", label: "Users & Roles", path: "/users-roles", adminOnly: true },
   { icon: "trash-outline", label: "Trash", path: "/trash" },
+  { icon: "time-outline", label: "Audit Log", path: "/audit-log", attorneyOnly: true },
+  { icon: "people-circle-outline", label: "Users & Roles", path: "/users-roles", attorneyOnly: true },
   { icon: "settings-outline", label: "Settings", path: "/settings" },
 ];
 
@@ -130,7 +131,7 @@ export function AppDrawer() {
           </View>
 
           <View className="mt-3 gap-0.5">
-            {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
+            {NAV_ITEMS.filter((item) => !item.attorneyOnly || user?.role === "ATTORNEY").map((item) => (
               <Pressable
                 key={item.path}
                 onPress={() => navigate(item.path)}

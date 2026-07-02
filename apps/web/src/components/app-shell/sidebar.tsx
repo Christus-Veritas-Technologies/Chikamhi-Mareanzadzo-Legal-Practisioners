@@ -17,22 +17,24 @@ import { useTransition } from "react";
 
 import { useCurrentUser } from "@/contexts/current-user-context";
 
+// Attorneys and paralegals have equal access to everything except the Audit Log and Users &
+// Roles (below) — Trash, folders/tags, etc. stay in this shared section.
 const WORKSPACE_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/cases", label: "Cases", icon: FolderTree },
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/folders-tags", label: "Folders & Tags", icon: FolderTree },
-  { href: "/audit-log", label: "Audit Log", icon: History },
-] as const;
-
-const ADMIN_LINKS = [
-  { href: "/users-roles", label: "Users & Roles", icon: UserCog },
   { href: "/trash", label: "Trash", icon: Trash2 },
 ] as const;
 
+// Attorney-only: compliance oversight and staff management.
+const ATTORNEY_LINKS = [
+  { href: "/audit-log", label: "Audit Log", icon: History },
+  { href: "/users-roles", label: "Users & Roles", icon: UserCog },
+] as const;
+
 const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Admin",
   ATTORNEY: "Attorney",
   PARALEGAL: "Paralegal",
 };
@@ -112,7 +114,9 @@ export function AppSidebar() {
         </div>
 
         <NavSection title="Workspace" links={WORKSPACE_LINKS} pathname={pathname} />
-        <NavSection title="Administration" links={ADMIN_LINKS} pathname={pathname} />
+        {user.role === "ATTORNEY" ? (
+          <NavSection title="Administration" links={ATTORNEY_LINKS} pathname={pathname} />
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 rounded-md px-2 py-2">

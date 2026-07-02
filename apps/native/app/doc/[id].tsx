@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Linking, Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -18,6 +18,7 @@ type DocumentDetail = {
   modified: string;
   client: { id: string; name: string } | null;
   case: { id: string; title: string } | null;
+  downloadUrl: string | null;
 };
 
 export default function DocumentViewerScreen() {
@@ -99,7 +100,16 @@ export default function DocumentViewerScreen() {
         </View>
       </View>
 
-      <Pressable className="mt-6 mb-6 flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3">
+      <Pressable
+        onPress={() => {
+          if (doc.downloadUrl) {
+            Linking.openURL(doc.downloadUrl);
+            return;
+          }
+          Alert.alert("No file stored yet", "This record has no uploaded bytes to download.");
+        }}
+        className="mt-6 mb-6 flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3"
+      >
         <Ionicons name="download-outline" size={16} color="#F5F0E6" />
         <Text className="text-sm font-semibold text-primary-foreground">Download</Text>
       </Pressable>

@@ -1,16 +1,18 @@
 "use client";
 
+import { Button } from "@CMLP/ui/components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
-import { FileX, Search } from "lucide-react";
+import { FileX, Search, Tag, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { StatusPill } from "@/components/status-pill";
-import { useApi } from "@/hooks/use-api";
+import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
 
 type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
@@ -76,6 +78,87 @@ function DocumentsPageInner() {
   const cases = (casesData?.cases ?? []).filter((c) => !clientFilter || c.client.id === clientFilter);
   const tags = tagsData?.tags ?? [];
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkTagId, setBulkTagId] = useState("");
+  const [bulkCaseId, setBulkCaseId] = useState("");
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
+
+  // Selection is by id only, so it can't survive a "Load more"/filter change pointing at a
+  // different result set — clear it whenever the visible page changes underneath it.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [path]);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === documents.length ? new Set() : new Set(documents.map((d) => d.id))));
+  }
+
+  async function applyBulkTag() {
+    if (!bulkTagId || selected.size === 0) return;
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/tag", {
+        method: "POST",
+        body: JSON.stringify({ documentIds: Array.from(selected), tagId: bulkTagId }),
+      });
+      toast.success(`Tagged ${selected.size} documents.`);
+      setSelected(new Set());
+      setBulkTagId("");
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't apply tag.");
+    } finally {
+      setIsBulkWorking(false);
+    }
+  }
+
+  async function applyBulkMove() {
+    if (!bulkCaseId || selected.size === 0) return;
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/move", {
+        method: "POST",
+        body: JSON.stringify({ documentIds: Array.from(selected), caseId: bulkCaseId }),
+      });
+      toast.success(`Moved ${selected.size} documents.`);
+      setSelected(new Set());
+      setBulkCaseId("");
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't move documents.");
+    } finally {
+      setIsBulkWorking(false);
+    }
+  }
+
+  async function applyBulkDelete() {
+    if (selected.size === 0) return;
+    if (!confirm(`Move ${selected.size} document(s) to Trash?`)) return;
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/delete", {
+        method: "POST",
+        body: JSON.stringify({ documentIds: Array.from(selected) }),
+      });
+      toast.success(`Moved ${selected.size} documents to Trash.`);
+      setSelected(new Set());
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete documents.");
+    } finally {
+      setIsBulkWorking(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -104,7 +187,7 @@ function DocumentsPageInner() {
             setClientFilter(e.target.value);
             setCaseFilter("");
           }}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All clients</option>
           {clients.map((c) => (
@@ -116,7 +199,7 @@ function DocumentsPageInner() {
         <select
           value={caseFilter}
           onChange={(e) => setCaseFilter(e.target.value)}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All cases</option>
           {cases.map((c) => (
@@ -128,7 +211,7 @@ function DocumentsPageInner() {
         <select
           value={tagFilter}
           onChange={(e) => setTagFilter(e.target.value)}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All tags</option>
           {tags.map((t) => (
@@ -140,7 +223,7 @@ function DocumentsPageInner() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+          className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -151,7 +234,56 @@ function DocumentsPageInner() {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      {selected.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/30 px-3 py-2">
+          <span className="text-xs font-medium text-foreground">{selected.size} selected</span>
+          <select
+            value={bulkTagId}
+            onChange={(e) => setBulkTagId(e.target.value)}
+            className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
+          >
+            <option value="">Add tag…</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" disabled={!bulkTagId || isBulkWorking} onClick={applyBulkTag}>
+            <Tag />
+            Apply
+          </Button>
+          <select
+            value={bulkCaseId}
+            onChange={(e) => setBulkCaseId(e.target.value)}
+            className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
+          >
+            <option value="">Move to case…</option>
+            {(casesData?.cases ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" disabled={!bulkCaseId || isBulkWorking} onClick={applyBulkMove}>
+            Move
+          </Button>
+          <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={applyBulkDelete}>
+            <Trash2 />
+            Delete
+          </Button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3" />
+            Clear
+          </button>
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading documents…" />
         ) : error ? (
@@ -167,6 +299,14 @@ function DocumentsPageInner() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
+                  <th className="w-8 px-4 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={documents.length > 0 && selected.size === documents.length}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </th>
                   <th className="px-4 py-2.5 font-medium">Document</th>
                   <th className="px-4 py-2.5 font-medium">Case · Client</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
@@ -177,6 +317,14 @@ function DocumentsPageInner() {
               <tbody>
                 {documents.map((doc) => (
                   <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(doc.id)}
+                        onChange={() => toggleSelected(doc.id)}
+                        aria-label={`Select ${doc.name}`}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
                         {doc.name}

@@ -6,6 +6,8 @@ import { hashPassword } from "./password";
 // (upserts by unique fields, skip-duplicates on the rest).
 
 const STAFF = [
+  // Quick-access dev/demo login requested directly (not part of the mockup roster).
+  { name: "Mareanadzo", username: "mareanadzo", email: "mareanadzo@cmlaw.co.zw", role: "ADMIN" as const, password: "12345678" },
   { name: "Tafadzwa Chikamhi", username: "t.chikamhi", email: "t.chikamhi@cmlaw.co.zw", role: "ADMIN" as const, password: "ChangeMe123!" },
   { name: "Rutendo Mareanadzo", username: "r.mareanadzo", email: "r.mareanadzo@cmlaw.co.zw", role: "ADMIN" as const, password: "ChangeMe123!" },
   { name: "Praise Dube", username: "p.dube", email: "p.dube@cmlaw.co.zw", role: "ATTORNEY" as const, password: "ChangeMe123!" },

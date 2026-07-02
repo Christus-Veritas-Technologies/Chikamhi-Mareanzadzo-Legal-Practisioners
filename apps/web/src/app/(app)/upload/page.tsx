@@ -51,6 +51,16 @@ function extToFileType(name: string) {
   return ext;
 }
 
+// Splits a filename into an editable base and a locked extension (including the dot) so
+// renaming can never accidentally strip or corrupt the extension. Names with no extension,
+// or dotfile-style names starting with a dot (e.g. ".env"), are treated as having no
+// extension at all — the whole thing is editable.
+function splitName(name: string): { base: string; ext: string } {
+  const idx = name.lastIndexOf(".");
+  if (idx <= 0) return { base: name, ext: "" };
+  return { base: name.slice(0, idx), ext: name.slice(idx) };
+}
+
 function destinationSummary(d: Destination): string {
   if (!d.clientId) return "";
   const parts = [d.clientName, d.caseTitle ?? "Unfiled"];
@@ -314,11 +324,20 @@ export default function UploadPage() {
                 <div className="flex items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" />
                   {item.state === "ready" ? (
-                    <input
-                      value={item.name}
-                      onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium text-foreground hover:border-input focus:border-input focus:outline-none"
-                    />
+                    <div className="flex min-w-0 flex-1 items-center">
+                      <input
+                        value={splitName(item.name).base}
+                        onChange={(e) =>
+                          updateItem(item.id, { name: `${e.target.value}${splitName(item.name).ext}` })
+                        }
+                        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium text-foreground hover:border-input focus:border-input focus:outline-none"
+                      />
+                      {splitName(item.name).ext ? (
+                        <span className="shrink-0 pr-1.5 text-sm font-medium text-muted-foreground">
+                          {splitName(item.name).ext}
+                        </span>
+                      ) : null}
+                    </div>
                   ) : (
                     <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{item.name}</p>
                   )}

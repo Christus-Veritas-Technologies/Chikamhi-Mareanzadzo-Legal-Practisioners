@@ -3,13 +3,58 @@ import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
-import { getCasesForClient, getClient } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+
+type ClientDetail = {
+  id: string;
+  name: string;
+  type: string;
+  regNumber: string | null;
+  attorneyOfRecord: string;
+  clientSince: string;
+  documents: number;
+  storage: string;
+  cases: {
+    id: string;
+    caseNumber: string;
+    title: string;
+    status: string;
+    matterType: string;
+    location: string | null;
+    updatedAt: string;
+  }[];
+};
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+}
 
 export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const client = getClient(id);
+  const { data, isLoading, error, refetch } = useApi<{ client: ClientDetail }>(`/clients/${id}`);
+  const client = data?.client;
+
+  if (isLoading) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Client" }} />
+        <LoadingState label="Loading client…" />
+      </Container>
+    );
+  }
+
+  if (error && !error.toLowerCase().includes("not found")) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Client" }} />
+        <InlineError message={error} onRetry={refetch} />
+      </Container>
+    );
+  }
 
   if (!client) {
     return (
@@ -20,7 +65,7 @@ export default function ClientDetailScreen() {
     );
   }
 
-  const cases = getCasesForClient(client.id);
+  const cases = client.cases;
 
   return (
     <Container className="px-5 pt-3">
@@ -28,7 +73,7 @@ export default function ClientDetailScreen() {
 
       <View className="flex-row items-center gap-3">
         <View className="h-12 w-12 items-center justify-center rounded-full bg-brand-muted">
-          <Text className="text-sm font-semibold text-brand-foreground">{client.initials}</Text>
+          <Text className="text-sm font-semibold text-brand-foreground">{initials(client.name)}</Text>
         </View>
         <View className="flex-1">
           <Text className="font-serif text-lg font-semibold text-foreground">{client.name}</Text>
@@ -40,7 +85,7 @@ export default function ClientDetailScreen() {
 
       <View className="mt-4 flex-row gap-3">
         <View className="flex-1 rounded-xl border border-border px-3 py-3">
-          <Text className="text-lg font-semibold text-foreground">{client.openCases}</Text>
+          <Text className="text-lg font-semibold text-foreground">{cases.length}</Text>
           <Text className="text-xs text-muted-foreground">Open cases</Text>
         </View>
         <View className="flex-1 rounded-xl border border-border px-3 py-3">
@@ -64,19 +109,13 @@ export default function ClientDetailScreen() {
               <Pressable className="rounded-xl border border-border px-3 py-3">
                 <View className="flex-row items-start justify-between">
                   <Text className="text-[11px] text-muted-foreground">{c.caseNumber}</Text>
-                  <StatusPill status={c.status} />
+                  <StatusPill status={formatStatus(c.status)} />
                 </View>
                 <Text className="mt-1 text-sm font-semibold text-foreground">{c.title}</Text>
                 <Text className="text-xs text-muted-foreground">
                   {c.matterType}
                   {c.location ? ` · ${c.location}` : ""}
                 </Text>
-                <View className="mt-2 flex-row items-center justify-between">
-                  <Text className="text-[11px] text-muted-foreground">
-                    {c.documentCount} documents
-                  </Text>
-                  <Text className="text-[11px] text-muted-foreground">Updated {c.updated}</Text>
-                </View>
               </Pressable>
             </Link>
           ))}

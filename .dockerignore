@@ -1,0 +1,29 @@
+# Dependencies & build output
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+dist
+**/dist
+.expo
+**/.expo
+
+# VCS / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Env files — never bake secrets into an image layer
+.env
+.env.*
+!.env.example
+
+# Not used by either Dockerfile (Expo/React Native, no Docker target)
+apps/native
+
+# Logs / OS noise
+*.log
+.DS_Store

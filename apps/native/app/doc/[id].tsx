@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
-import { Alert, Linking, Pressable, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Image, Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -8,11 +9,13 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
 import { useApi } from "@/hooks/use-api";
+import { downloadDocument, isDownloaded } from "@/lib/downloads";
 import { formatStatus } from "@/lib/format-status";
 
 type DocumentDetail = {
   id: string;
   name: string;
+  fileType: string;
   status: string;
   uploadedBy: string;
   modified: string;
@@ -21,10 +24,36 @@ type DocumentDetail = {
   downloadUrl: string | null;
 };
 
+const IMAGE_TYPES = ["jpg", "jpeg", "png", "heic", "webp"];
+
 export default function DocumentViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, error, refetch } = useApi<{ document: DocumentDetail }>(`/documents/${id}`);
   const doc = data?.document;
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [savedOffline, setSavedOffline] = useState(false);
+
+  useEffect(() => {
+    if (doc) setSavedOffline(isDownloaded(doc.id));
+  }, [doc]);
+
+  async function handleDownload() {
+    if (!doc) return;
+    if (!doc.downloadUrl) {
+      Alert.alert("No file stored yet", "This record has no uploaded bytes to download.");
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await downloadDocument({ id: doc.id, name: doc.name, downloadUrl: doc.downloadUrl });
+      setSavedOffline(true);
+      Alert.alert("Downloaded", "Saved for offline access. Find it under Downloads in the menu.");
+    } catch (err) {
+      Alert.alert("Download failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -57,11 +86,23 @@ export default function DocumentViewerScreen() {
     <Container className="px-5 pt-3">
       <Stack.Screen options={{ title: doc.name }} />
 
-      <View className="h-64 items-center justify-center rounded-xl bg-muted/15">
-        <Ionicons name="document-text-outline" size={32} color="#8A8378" />
-        <Text className="mt-2 text-center text-xs text-muted-foreground">
-          Preview isn't available in this build yet — download to view the file.
-        </Text>
+      <View className="h-64 items-center justify-center overflow-hidden rounded-xl bg-muted/15">
+        {doc.downloadUrl && IMAGE_TYPES.includes(doc.fileType.toLowerCase()) ? (
+          <Image source={{ uri: doc.downloadUrl }} className="h-full w-full" resizeMode="contain" />
+        ) : (
+          <>
+            <Ionicons
+              name={doc.fileType.toLowerCase() === "pdf" ? "document-text-outline" : "document-outline"}
+              size={32}
+              color="#8A8378"
+            />
+            <Text className="mt-2 text-center text-xs text-muted-foreground">
+              {doc.downloadUrl
+                ? "Preview isn't available for this file type — download to view it."
+                : "No file stored yet for this record."}
+            </Text>
+          </>
+        )}
       </View>
 
       <View className="mt-4">
@@ -101,17 +142,22 @@ export default function DocumentViewerScreen() {
       </View>
 
       <Pressable
-        onPress={() => {
-          if (doc.downloadUrl) {
-            Linking.openURL(doc.downloadUrl);
-            return;
-          }
-          Alert.alert("No file stored yet", "This record has no uploaded bytes to download.");
-        }}
+        onPress={handleDownload}
+        disabled={isDownloading}
         className="mt-6 mb-6 flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3"
       >
-        <Ionicons name="download-outline" size={16} color="#F5F0E6" />
-        <Text className="text-sm font-semibold text-primary-foreground">Download</Text>
+        {isDownloading ? (
+          <ActivityIndicator color="#F5F0E6" size="small" />
+        ) : (
+          <Ionicons
+            name={savedOffline ? "checkmark-circle-outline" : "download-outline"}
+            size={16}
+            color="#F5F0E6"
+          />
+        )}
+        <Text className="text-sm font-semibold text-primary-foreground">
+          {isDownloading ? "Downloading…" : savedOffline ? "Saved offline · Download again" : "Download"}
+        </Text>
       </Pressable>
     </Container>
   );

@@ -1,12 +1,13 @@
 "use client";
 
 import { Button } from "@CMLP/ui/components/button";
-import { Download, History } from "lucide-react";
+import { Download, History, Lock } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { useCurrentUser } from "@/contexts/current-user-context";
 import { useApi } from "@/hooks/use-api";
 
 type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
@@ -58,6 +59,16 @@ function initials(name: string) {
 const PAGE_SIZE = 50;
 
 export default function AuditLogPage() {
+  const currentUser = useCurrentUser();
+  // Attorney-only — a paralegal landing here directly (typed URL, stale bookmark) sees a
+  // plain access-denied message instead of the compliance log (the API would 403 anyway).
+  if (currentUser.role !== "ATTORNEY") {
+    return <EmptyState icon={Lock} title="Attorneys only" description="The Audit Log is only available to attorneys." />;
+  }
+  return <AuditLogContent />;
+}
+
+function AuditLogContent() {
   const [actorFilter, setActorFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [limit, setLimit] = useState(PAGE_SIZE);

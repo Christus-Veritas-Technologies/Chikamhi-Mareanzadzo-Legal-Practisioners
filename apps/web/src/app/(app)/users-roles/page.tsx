@@ -10,12 +10,12 @@ import {
   DialogTitle,
 } from "@CMLP/ui/components/dialog";
 import { cn } from "@CMLP/ui/lib/utils";
-import { Copy, KeyRound, Users } from "lucide-react";
+import { Copy, KeyRound, Lock, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { CreateUserDialog } from "@/components/create-user-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { InviteUserDialog } from "@/components/invite-user-dialog";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { useCurrentUser } from "@/contexts/current-user-context";
@@ -30,12 +30,12 @@ type StaffMember = {
   name: string;
   email: string;
   username: string;
-  role: "ADMIN" | "ATTORNEY" | "PARALEGAL";
+  role: "ATTORNEY" | "PARALEGAL";
   isActive: boolean;
   lastActive: string | null;
 };
 
-const ROLES: StaffMember["role"][] = ["ADMIN", "ATTORNEY", "PARALEGAL"];
+const ROLES: StaffMember["role"][] = ["ATTORNEY", "PARALEGAL"];
 
 function initials(name: string) {
   return name
@@ -49,9 +49,23 @@ function initials(name: string) {
 const PAGE_SIZE = 25;
 
 export default function UsersRolesPage() {
-  // Managing accounts (invite, role changes, suspend) is admin-only server-side — mirror
-  // that here so non-admins see a read-only roster instead of controls that 403.
-  const isAdmin = useCurrentUser().role === "ADMIN";
+  const currentUser = useCurrentUser();
+  // Users & Roles is attorney-only — a paralegal landing here directly (typed URL, stale
+  // bookmark) sees a plain access-denied message instead of a read-only roster.
+  if (currentUser.role !== "ATTORNEY") {
+    return (
+      <EmptyState
+        icon={Lock}
+        title="Attorneys only"
+        description="Users & Roles is only available to attorneys."
+      />
+    );
+  }
+
+  return <UsersRolesContent currentUserId={currentUser.id} />;
+}
+
+function UsersRolesContent({ currentUserId }: { currentUserId: string }) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[]; pagination: Pagination }>(
     `/users?limit=${limit}`,
@@ -65,13 +79,24 @@ export default function UsersRolesPage() {
   const [isResetting, setIsResetting] = useState(false);
 
   async function setRole(id: string, role: StaffMember["role"]) {
-    await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
-    refetch();
+    try {
+      await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't change role.");
+    }
   }
 
   async function toggleActive(id: string, current: boolean) {
-    await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: !current }) });
-    refetch();
+    try {
+      await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: !current }) });
+      refetch();
+    } catch (err) {
+      // This is exactly the case that used to lock people out silently: an attorney
+      // suspending themselves or a fellow attorney. The backend now blocks it — surface
+      // *why* instead of a bare error.
+      toast.error(err instanceof Error ? err.message : "Couldn't update this account.");
+    }
   }
 
   async function resetPassword() {
@@ -99,7 +124,7 @@ export default function UsersRolesPage() {
             {data?.pagination.total ?? staff.length} staff accounts · {activeCount} active
           </p>
         </div>
-        {isAdmin ? <InviteUserDialog onSaved={refetch} /> : null}
+        <CreateUserDialog onSaved={refetch} />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -108,7 +133,7 @@ export default function UsersRolesPage() {
         ) : error ? (
           <InlineError message={error} onRetry={refetch} />
         ) : staff.length === 0 ? (
-          <EmptyState icon={Users} title="No staff accounts" description="Invite your first colleague to get started." />
+          <EmptyState icon={Users} title="No staff accounts" description="Create your first colleague's account to get started." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -122,21 +147,30 @@ export default function UsersRolesPage() {
                 </tr>
               </thead>
               <tbody>
-                {staff.map((member) => (
-                  <tr key={member.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex size-7 items-center justify-center rounded-full bg-brand-muted text-[10px] font-semibold text-brand-foreground">
-                          {initials(member.name)}
-                        </span>
-                        <div>
-                          <p className="font-medium text-foreground">{member.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{member.email}</p>
+                {staff.map((member) => {
+                  // Mirrors the server rule: an attorney can't suspend/reactivate another
+                  // attorney (including themselves) — grey the toggle out instead of letting
+                  // them click it and hit a 403.
+                  const suspendLocked = member.role === "ATTORNEY";
+                  return (
+                    <tr key={member.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex size-7 items-center justify-center rounded-full bg-brand-muted text-[10px] font-semibold text-brand-foreground">
+                            {initials(member.name)}
+                          </span>
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {member.name}
+                              {member.id === currentUserId ? (
+                                <span className="ml-1.5 text-[10px] text-muted-foreground">(you)</span>
+                              ) : null}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">{member.email}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {isAdmin ? (
+                      </td>
+                      <td className="px-4 py-3">
                         <select
                           value={member.role}
                           onChange={(e) => setRole(member.id, e.target.value as StaffMember["role"])}
@@ -148,16 +182,14 @@ export default function UsersRolesPage() {
                             </option>
                           ))}
                         </select>
-                      ) : (
-                        <span className="text-xs text-foreground">{formatStatus(member.role)}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isAdmin ? (
+                      </td>
+                      <td className="px-4 py-3">
                         <button
                           type="button"
-                          onClick={() => toggleActive(member.id, member.isActive)}
-                          className="flex items-center gap-2"
+                          onClick={() => !suspendLocked && toggleActive(member.id, member.isActive)}
+                          disabled={suspendLocked}
+                          title={suspendLocked ? "Attorneys can't suspend or reactivate other attorneys." : undefined}
+                          className={cn("flex items-center gap-2", suspendLocked && "cursor-not-allowed opacity-50")}
                         >
                           <span
                             className={cn(
@@ -171,17 +203,11 @@ export default function UsersRolesPage() {
                             {member.isActive ? "Active" : "Suspended"}
                           </span>
                         </button>
-                      ) : (
-                        <span className={member.isActive ? "text-xs text-success" : "text-xs text-muted-foreground"}>
-                          {member.isActive ? "Active" : "Suspended"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {member.lastActive ? relativeTime(member.lastActive) : "Never"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {isAdmin ? (
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {member.lastActive ? relativeTime(member.lastActive) : "Never"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <button
                           type="button"
                           onClick={() => setResetFor(member)}
@@ -190,10 +216,10 @@ export default function UsersRolesPage() {
                           <KeyRound className="size-3" />
                           Reset password
                         </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

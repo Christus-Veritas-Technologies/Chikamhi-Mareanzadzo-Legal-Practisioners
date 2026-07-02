@@ -1,21 +1,22 @@
 "use client";
 
-import { FolderPlus, Pencil, Plus, Tags as TagsIcon } from "lucide-react";
+import { FolderPlus, Pencil, Tags as TagsIcon, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CreateFolderDialog } from "@/components/create-folder-dialog";
+import { CreateTagDialog } from "@/components/create-tag-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
-import { useCurrentUser } from "@/contexts/current-user-context";
 import { apiFetch, useApi } from "@/hooks/use-api";
 
-type Folder = { id: string; name: string; documentCount: number };
+type Folder = { id: string; name: string; documentCount: number; tags: { id: string; name: string; colorClass: string }[] };
 type Tag = { id: string; name: string; colorClass: string; documentCount: number };
 
 export default function FoldersTagsPage() {
-  // Creating/renaming folders and tags is admin-only server-side — mirror that here so
-  // non-admins aren't shown controls that will just 403.
-  const isAdmin = useCurrentUser().role === "ADMIN";
-
+  // Folders/tags are equal-access for both roles now — no admin gate here (the only two
+  // attorney-only areas in the app are the Audit Log and Users & Roles).
   const { data: foldersData, isLoading: foldersLoading, error: foldersError, refetch: refetchFolders } =
     useApi<{ folders: Folder[] }>("/folders");
   const { data: tagsData, isLoading: tagsLoading, error: tagsError, refetch: refetchTags } =
@@ -24,37 +25,14 @@ export default function FoldersTagsPage() {
   const folders = foldersData?.folders ?? [];
   const tags = tagsData?.tags ?? [];
 
-  const [newFolderName, setNewFolderName] = useState("");
-  const [addingFolder, setAddingFolder] = useState(false);
-  const [isSavingFolder, setIsSavingFolder] = useState(false);
-  const [isSavingTag, setIsSavingTag] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingTagName, setEditingTagName] = useState("");
 
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<Folder | null>(null);
+  const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const totalDocs = folders.reduce((sum, f) => sum + f.documentCount, 0);
-
-  async function addFolder() {
-    if (!newFolderName.trim()) return;
-    setIsSavingFolder(true);
-    try {
-      await apiFetch("/folders", { method: "POST", body: JSON.stringify({ name: newFolderName.trim() }) });
-      setNewFolderName("");
-      setAddingFolder(false);
-      refetchFolders();
-    } finally {
-      setIsSavingFolder(false);
-    }
-  }
-
-  async function addTag() {
-    setIsSavingTag(true);
-    try {
-      await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name: "New tag" }) });
-      refetchTags();
-    } finally {
-      setIsSavingTag(false);
-    }
-  }
 
   function startEditingTag(tag: Tag) {
     setEditingTagId(tag.id);
@@ -74,13 +52,44 @@ export default function FoldersTagsPage() {
     refetchTags();
   }
 
+  async function confirmDeleteFolder(deleteDocuments: boolean) {
+    if (!deleteFolderTarget) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/folders/${deleteFolderTarget.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ deleteDocuments }),
+      });
+      toast.success("Folder moved to trash.");
+      setDeleteFolderTarget(null);
+      refetchFolders();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete folder.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  async function confirmDeleteTag() {
+    if (!deleteTagTarget) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/tags/${deleteTagTarget.id}`, { method: "DELETE" });
+      toast.success("Tag moved to trash.");
+      setDeleteTagTarget(null);
+      refetchTags();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete tag.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Folders & tags</h1>
-        <p className="text-sm text-muted-foreground">
-          Cross-cutting organisation layered over clients and cases. Drag a tag onto another to merge.
-        </p>
+        <p className="text-sm text-muted-foreground">Cross-cutting organisation layered over clients and cases.</p>
       </div>
 
       <div>
@@ -95,79 +104,50 @@ export default function FoldersTagsPage() {
           <LoadingState label="Loading folders…" />
         ) : foldersError ? (
           <InlineError message={foldersError} onRetry={refetchFolders} />
-        ) : folders.length === 0 && !addingFolder ? (
-          <EmptyState
-            icon={FolderPlus}
-            title="No folders yet"
-            description="Create your first folder to start organizing documents."
-            action={
-              isAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => setAddingFolder(true)}
-                  className="text-xs font-medium text-brand hover:underline"
-                >
-                  New folder
-                </button>
-              ) : undefined
-            }
-          />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {folders.map((folder) => (
-              <div key={folder.id} className="rounded-xl border border-border bg-card p-4">
+              <div key={folder.id} className="group relative rounded-xl border border-border bg-card p-4">
+                <button
+                  type="button"
+                  onClick={() => setDeleteFolderTarget(folder)}
+                  aria-label={`Delete ${folder.name}`}
+                  className="absolute top-2.5 right-2.5 opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                </button>
                 <FolderPlus className="size-4 text-brand" />
-                <p className="mt-2 text-sm font-medium text-foreground">{folder.name}</p>
+                <p className="mt-2 pr-4 text-sm font-medium text-foreground">{folder.name}</p>
                 <p className="text-xs text-muted-foreground">{folder.documentCount} documents</p>
+                {folder.tags.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {folder.tags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="flex items-center gap-1 rounded-full bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        <span className={`size-1.5 rounded-full ${tag.colorClass}`} />
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
 
-            {!isAdmin ? null : addingFolder ? (
-              <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-4">
-                <input
-                  autoFocus
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addFolder()}
-                  placeholder="Folder name"
-                  className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={addFolder}
-                  disabled={isSavingFolder}
-                  className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
-                >
-                  {isSavingFolder ? "Adding…" : "Add folder"}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingFolder(true)}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-4 text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="size-4" />
-                <span className="text-xs">New folder</span>
-              </button>
-            )}
+            <CreateFolderDialog tags={tags} onCreated={refetchFolders} />
           </div>
         )}
+
+        {!foldersLoading && !foldersError && folders.length === 0 ? (
+          <EmptyState icon={FolderPlus} title="No folders yet" description="Create your first folder to start organizing documents." />
+        ) : null}
       </div>
 
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">Tags</h2>
-          {isAdmin ? (
-            <button
-              type="button"
-              onClick={addTag}
-              disabled={isSavingTag}
-              className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
-            >
-              {isSavingTag ? "Adding…" : "+ New tag"}
-            </button>
-          ) : null}
+          <CreateTagDialog onCreated={refetchTags} />
         </div>
 
         {tagsLoading ? (
@@ -181,40 +161,70 @@ export default function FoldersTagsPage() {
             description="Tags help you find documents across clients and cases."
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            {tags.map((tag, i) => (
+          // Compact wrapped chips instead of one full-width row per tag — tags are small
+          // labels, they shouldn't each claim a whole table row.
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
               <div
                 key={tag.id}
-                className={`flex items-center justify-between px-4 py-2.5 ${i !== tags.length - 1 ? "border-b border-border" : ""}`}
+                className="group flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pr-1.5 pl-2.5 text-xs"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className={`size-2.5 rounded-full ${tag.colorClass}`} />
-                  {editingTagId === tag.id ? (
-                    <input
-                      autoFocus
-                      value={editingTagName}
-                      onChange={(e) => setEditingTagName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && saveTagName()}
-                      onBlur={saveTagName}
-                      className="py-1 rounded-lg border border-input bg-background px-1.5 text-sm text-foreground"
-                    />
-                  ) : (
-                    <span className="text-sm text-foreground">{tag.name}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{tag.documentCount} docs</span>
-                  {isAdmin ? (
-                    <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`}>
-                      <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
-                    </button>
-                  ) : null}
-                </div>
+                <span className={`size-2 rounded-full ${tag.colorClass}`} />
+                {editingTagId === tag.id ? (
+                  <input
+                    autoFocus
+                    value={editingTagName}
+                    onChange={(e) => setEditingTagName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveTagName()}
+                    onBlur={saveTagName}
+                    className="w-20 rounded border border-input bg-background px-1 text-xs text-foreground"
+                  />
+                ) : (
+                  <span className="text-foreground">{tag.name}</span>
+                )}
+                <span className="text-muted-foreground">· {tag.documentCount}</span>
+                <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`} className="ml-0.5">
+                  <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTagTarget(tag)}
+                  aria-label={`Delete ${tag.name}`}
+                >
+                  <Trash2 className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive" />
+                </button>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteFolderTarget !== null}
+        onOpenChange={(open) => !open && setDeleteFolderTarget(null)}
+        title={`Delete "${deleteFolderTarget?.name}"?`}
+        description="This moves the folder to Trash — it can be restored within 30 days."
+        confirmLabel="Delete folder"
+        destructive
+        isLoading={isDeleting}
+        cascadeLabel={
+          deleteFolderTarget && deleteFolderTarget.documentCount > 0
+            ? `Also delete the ${deleteFolderTarget.documentCount} document${deleteFolderTarget.documentCount === 1 ? "" : "s"} inside this folder`
+            : undefined
+        }
+        onConfirm={confirmDeleteFolder}
+      />
+
+      <ConfirmDialog
+        open={deleteTagTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTagTarget(null)}
+        title={`Delete "${deleteTagTarget?.name}"?`}
+        description="This moves the tag to Trash — it can be restored within 30 days. Documents keep their other tags."
+        confirmLabel="Delete tag"
+        destructive
+        isLoading={isDeleting}
+        onConfirm={confirmDeleteTag}
+      />
     </div>
   );
 }

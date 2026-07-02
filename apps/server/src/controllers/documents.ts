@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { buildStorageKey, getDownloadUrl, getUploadUrl, isR2Configured } from "@/lib/r2";
 
+const TRASH_RETENTION_DAYS = 30;
+
 function relativeTime(date: Date) {
   const diffMs = Date.now() - date.getTime();
   const hours = Math.floor(diffMs / 3_600_000);
@@ -20,6 +22,7 @@ export async function listDocuments(c: Context) {
   const caseId = c.req.query("caseId");
   const tagId = c.req.query("tagId");
   const status = c.req.query("status");
+  const uploadedById = c.req.query("uploadedById");
 
   const documents = await prisma.document.findMany({
     where: {
@@ -28,13 +31,14 @@ export async function listDocuments(c: Context) {
       ...(clientId ? { clientId } : {}),
       ...(caseId ? { caseId } : {}),
       ...(status ? { status: status as never } : {}),
+      ...(uploadedById ? { uploadedById } : {}),
       ...(tagId ? { tags: { some: { tagId } } } : {}),
     },
     orderBy: { updatedAt: "desc" },
     include: {
       client: { select: { id: true, name: true } },
       case: { select: { id: true, title: true } },
-      uploadedBy: { select: { name: true } },
+      uploadedBy: { select: { id: true, name: true } },
     },
   });
 
@@ -45,6 +49,7 @@ export async function listDocuments(c: Context) {
       fileType: doc.fileType,
       status: doc.status,
       uploadedBy: doc.uploadedBy.name,
+      uploadedById: doc.uploadedBy.id,
       modified: relativeTime(doc.updatedAt),
       client: doc.client,
       case: doc.case,
@@ -60,6 +65,7 @@ export async function getDocument(c: Context) {
     include: {
       client: { select: { id: true, name: true } },
       case: { select: { id: true, title: true } },
+      folder: { select: { id: true, name: true } },
       uploadedBy: { select: { name: true } },
       tags: { include: { tag: true } },
     },
@@ -91,10 +97,36 @@ export async function getDocument(c: Context) {
       modified: relativeTime(doc.updatedAt),
       client: doc.client,
       case: doc.case,
+      folder: doc.folder,
       tags: doc.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, colorClass: t.tag.colorClass })),
       hasStoredFile: Boolean(doc.storageKey),
       downloadUrl,
     },
+  });
+}
+
+export async function getDocumentHistory(c: Context) {
+  const id = c.req.param("id");
+
+  const entries = await prisma.auditLogEntry.findMany({
+    where: { documentId: id },
+    orderBy: { createdAt: "desc" },
+    include: { actor: { select: { name: true } } },
+  });
+
+  return c.json({
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      action: entry.action,
+      description: entry.targetLabel,
+      actor: entry.actor?.name ?? "System",
+      timestamp: entry.createdAt.toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    })),
   });
 }
 
@@ -154,11 +186,48 @@ export async function createDocument(c: Context) {
   return c.json({ document: doc, uploadUrl }, 201);
 }
 
+const updateDocumentSchema = z.object({
+  name: z.string().min(1).optional(),
+  status: z.enum(["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"]).optional(),
+  caseId: z.string().nullable().optional(),
+  folderId: z.string().nullable().optional(),
+});
+
+export async function updateDocument(c: Context) {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  const parsed = updateDocumentSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "Invalid update." } }, 400);
+  }
+
+  const user = c.get("user");
+  const before = await prisma.document.findUnique({ where: { id } });
+  if (!before) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Document not found." } }, 404);
+  }
+
+  const doc = await prisma.document.update({ where: { id }, data: parsed.data });
+
+  const moved = "caseId" in parsed.data || "folderId" in parsed.data;
+  if (moved) {
+    await prisma.auditLogEntry.create({
+      data: { actorId: user.id, action: "MOVED", targetLabel: doc.name, documentId: doc.id, caseId: doc.caseId },
+    });
+  }
+
+  return c.json({ document: doc });
+}
+
 export async function deleteDocument(c: Context) {
   const id = c.req.param("id");
   const user = c.get("user");
 
-  const doc = await prisma.document.update({ where: { id }, data: { deletedAt: new Date() } });
+  const doc = await prisma.document.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedById: user.id },
+  });
 
   await prisma.auditLogEntry.create({
     data: { actorId: user.id, action: "DELETED", targetLabel: doc.name, documentId: doc.id, caseId: doc.caseId },
@@ -167,18 +236,48 @@ export async function deleteDocument(c: Context) {
   return c.json({ document: doc });
 }
 
+export async function permanentlyDeleteDocument(c: Context) {
+  const id = c.req.param("id");
+  const doc = await prisma.document.findUnique({ where: { id } });
+
+  if (!doc) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Document not found." } }, 404);
+  }
+
+  // Audit entries reference this document — clear the FK before the hard delete so the
+  // firm-wide audit trail (which must survive purges) isn't cascaded away with it.
+  await prisma.auditLogEntry.updateMany({ where: { documentId: id }, data: { documentId: null } });
+  await prisma.documentTag.deleteMany({ where: { documentId: id } });
+  await prisma.document.delete({ where: { id } });
+
+  return c.json({ ok: true });
+}
+
 export async function listTrash(c: Context) {
   const documents = await prisma.document.findMany({
     where: { deletedAt: { not: null } },
     orderBy: { deletedAt: "desc" },
+    include: {
+      client: { select: { id: true, name: true } },
+      case: { select: { id: true, title: true } },
+      deletedBy: { select: { name: true } },
+    },
   });
 
   return c.json({
-    documents: documents.map((doc) => ({
-      id: doc.id,
-      name: doc.name,
-      deletedAt: doc.deletedAt?.toISOString(),
-    })),
+    documents: documents.map((doc) => {
+      const deletedAt = doc.deletedAt!;
+      const daysElapsed = Math.floor((Date.now() - deletedAt.getTime()) / 86_400_000);
+      return {
+        id: doc.id,
+        name: doc.name,
+        client: doc.client,
+        case: doc.case,
+        deletedBy: doc.deletedBy?.name ?? "Unknown",
+        deletedAt: deletedAt.toISOString(),
+        purgesInDays: Math.max(0, TRASH_RETENTION_DAYS - daysElapsed),
+      };
+    }),
   });
 }
 
@@ -186,7 +285,10 @@ export async function restoreDocument(c: Context) {
   const id = c.req.param("id");
   const user = c.get("user");
 
-  const doc = await prisma.document.update({ where: { id }, data: { deletedAt: null } });
+  const doc = await prisma.document.update({
+    where: { id },
+    data: { deletedAt: null, deletedById: null },
+  });
 
   await prisma.auditLogEntry.create({
     data: { actorId: user.id, action: "RESTORED", targetLabel: doc.name, documentId: doc.id },

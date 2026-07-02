@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import { createUser, listUsers, updateUser } from "@/controllers/users";
+import { createUser, listUsers, resetUserPassword, updateUser } from "@/controllers/users";
 import { requireAuth, requireRole } from "@/middleware/auth";
 
 const users = new Hono()
@@ -9,6 +9,7 @@ const users = new Hono()
   // Creating accounts and changing roles/active status is admin-only — the rest of the
   // staff can view the roster (e.g. for "lead attorney" pickers) but not manage it.
   .post("/", requireRole("ADMIN"), createUser)
-  .patch("/:id", requireRole("ADMIN"), updateUser);
+  .patch("/:id", requireRole("ADMIN"), updateUser)
+  .post("/:id/reset-password", requireRole("ADMIN"), resetUserPassword);
 
 export default users;

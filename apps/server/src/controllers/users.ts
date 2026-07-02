@@ -79,6 +79,25 @@ export async function createUser(c: Context) {
   return c.json({ user: serializeUser(user), tempPassword }, 201);
 }
 
+export async function resetUserPassword(c: Context) {
+  const id = c.req.param("id");
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    return c.json({ error: { code: "NOT_FOUND", message: "User not found." } }, 404);
+  }
+
+  const tempPassword = randomTempPassword();
+  const { hash, salt } = hashPassword(tempPassword);
+  const user = await prisma.user.update({
+    where: { id },
+    data: { passwordHash: hash, passwordSalt: salt },
+  });
+
+  // No email delivery configured yet — return the temp password once so the admin can hand
+  // it off directly. The user should be told to change it after signing in.
+  return c.json({ user: serializeUser(user), tempPassword });
+}
+
 const updateUserSchema = z.object({
   role: z.enum(["ADMIN", "ATTORNEY", "PARALEGAL"]).optional(),
   isActive: z.boolean().optional(),

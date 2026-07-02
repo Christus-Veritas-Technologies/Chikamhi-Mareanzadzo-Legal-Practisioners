@@ -11,6 +11,7 @@ type QueueItem = {
   id: string;
   name: string;
   fileType: string;
+  file: File;
   state: "ready" | "uploading" | "done" | "failed";
   clientId?: string;
   caseId?: string;
@@ -40,6 +41,7 @@ export default function UploadPage() {
       id: `${Date.now()}-${i}`,
       name: file.name,
       fileType: extToFileType(file.name),
+      file,
       state: "ready",
     }));
     setQueue((q) => [...q, ...items]);
@@ -63,15 +65,29 @@ export default function UploadPage() {
         if (item.state !== "ready" || !item.clientId) continue;
         updateItem(item.id, { state: "uploading" });
         try {
-          await apiFetch("/documents", {
+          const { uploadUrl } = await apiFetch<{ uploadUrl: string | null }>("/documents", {
             method: "POST",
             body: JSON.stringify({
               name: item.name,
               fileType: item.fileType,
               clientId: item.clientId,
               caseId: item.caseId || undefined,
+              contentType: item.file.type || undefined,
+              sizeBytes: item.file.size || undefined,
             }),
           });
+
+          // If R2 is configured, uploadUrl is a presigned PUT URL — push the actual bytes
+          // straight to storage from the browser. Otherwise this stays a metadata-only record.
+          if (uploadUrl) {
+            const putRes = await fetch(uploadUrl, {
+              method: "PUT",
+              headers: { "Content-Type": item.file.type || "application/octet-stream" },
+              body: item.file,
+            });
+            if (!putRes.ok) throw new Error("File upload to storage failed.");
+          }
+
           updateItem(item.id, { state: "done" });
         } catch (err) {
           updateItem(item.id, {

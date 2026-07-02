@@ -1,8 +1,18 @@
 "use client";
 
+import { Button } from "@CMLP/ui/components/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@CMLP/ui/components/dialog";
 import { cn } from "@CMLP/ui/lib/utils";
-import { Users } from "lucide-react";
+import { Copy, KeyRound, Users } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
@@ -50,6 +60,9 @@ export default function UsersRolesPage() {
   const staff = data?.users ?? [];
 
   const activeCount = staff.filter((s) => s.isActive).length;
+  const [resetFor, setResetFor] = useState<StaffMember | null>(null);
+  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   async function setRole(id: string, role: StaffMember["role"]) {
     await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
@@ -59,6 +72,22 @@ export default function UsersRolesPage() {
   async function toggleActive(id: string, current: boolean) {
     await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: !current }) });
     refetch();
+  }
+
+  async function resetPassword() {
+    if (!resetFor) return;
+    setIsResetting(true);
+    try {
+      const { tempPassword } = await apiFetch<{ tempPassword: string }>(`/users/${resetFor.id}/reset-password`, {
+        method: "POST",
+      });
+      setResetTempPassword(tempPassword);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't reset password.");
+      setResetFor(null);
+    } finally {
+      setIsResetting(false);
+    }
   }
 
   return (
@@ -73,7 +102,7 @@ export default function UsersRolesPage() {
         {isAdmin ? <InviteUserDialog onSaved={refetch} /> : null}
       </div>
 
-      <div className="overflow-hidden rounded-none border border-border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {isLoading ? (
           <LoadingState label="Loading users…" />
         ) : error ? (
@@ -89,6 +118,7 @@ export default function UsersRolesPage() {
                   <th className="px-4 py-2.5 font-medium">Role</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium">Last active</th>
+                  <th className="px-4 py-2.5 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -110,7 +140,7 @@ export default function UsersRolesPage() {
                         <select
                           value={member.role}
                           onChange={(e) => setRole(member.id, e.target.value as StaffMember["role"])}
-                          className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                          className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                         >
                           {ROLES.map((role) => (
                             <option key={role} value={role}>
@@ -150,6 +180,18 @@ export default function UsersRolesPage() {
                     <td className="px-4 py-3 text-muted-foreground">
                       {member.lastActive ? relativeTime(member.lastActive) : "Never"}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => setResetFor(member)}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <KeyRound className="size-3" />
+                          Reset password
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -165,6 +207,72 @@ export default function UsersRolesPage() {
           />
         ) : null}
       </div>
+
+      <Dialog
+        open={Boolean(resetFor)}
+        onOpenChange={(next) => {
+          if (!next) {
+            setResetFor(null);
+            setResetTempPassword(null);
+          }
+        }}
+      >
+        <DialogContent>
+          {resetTempPassword ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Password reset</DialogTitle>
+                <DialogDescription>
+                  No email delivery is configured yet — share this temporary password with {resetFor?.name}{" "}
+                  directly. It's shown once and won't be recoverable afterward.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                <span className="font-mono text-foreground">{resetTempPassword}</span>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-brand hover:underline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetTempPassword);
+                    toast.success("Copied.");
+                  }}
+                >
+                  <Copy className="size-3" />
+                  Copy
+                </button>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setResetFor(null);
+                    setResetTempPassword(null);
+                  }}
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Reset password?</DialogTitle>
+                <DialogDescription>
+                  This immediately invalidates {resetFor?.name}'s current password and generates a new temporary
+                  one for you to hand off to them.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setResetFor(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={resetPassword} disabled={isResetting}>
+                  {isResetting ? "Resetting…" : "Reset password"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

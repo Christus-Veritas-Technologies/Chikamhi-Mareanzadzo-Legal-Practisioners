@@ -52,6 +52,24 @@ export default function UsersRolesScreen() {
   const [isInviting, setIsInviting] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
+  const [resetFor, setResetFor] = useState<StaffMember | null>(null);
+  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+
+  async function resetPassword() {
+    if (!resetFor) return;
+    setIsResetting(true);
+    try {
+      const { tempPassword: temp } = await apiFetch<{ tempPassword: string }>(
+        `/users/${resetFor.id}/reset-password`,
+        { method: "POST", token },
+      );
+      setResetTempPassword(temp);
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
   async function setRole(id: string, role: StaffMember["role"]) {
     setRolePickerFor(null);
     await apiFetch(`/users/${id}`, { method: "PATCH", body: { role }, token });
@@ -156,6 +174,12 @@ export default function UsersRolesScreen() {
                   {member.lastActive ? relativeTime(member.lastActive) : "Never"}
                 </Text>
               </View>
+
+              {isAdmin ? (
+                <Pressable onPress={() => setResetFor(member)} className="mt-2 self-start">
+                  <Text className="text-[11px] font-medium text-muted-foreground">Reset password</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))}
           {data?.pagination ? (
@@ -240,6 +264,56 @@ export default function UsersRolesScreen() {
                   >
                     <Text className="text-sm font-semibold text-primary-foreground">
                       {isInviting ? "Inviting…" : "Send invite"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={Boolean(resetFor)} transparent animationType="fade">
+        <View className="flex-1 items-center justify-center bg-black/40 px-8">
+          <View className="w-full gap-3 rounded-xl bg-background p-4">
+            {resetTempPassword ? (
+              <>
+                <Text className="text-sm font-semibold text-foreground">Password reset</Text>
+                <Text className="text-xs text-muted-foreground">
+                  Share this temporary password with {resetFor?.name} directly (no email is configured yet).
+                  Shown once.
+                </Text>
+                <Text className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                  {resetTempPassword}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setResetFor(null);
+                    setResetTempPassword(null);
+                  }}
+                  className="mt-1 items-center rounded-xl bg-primary py-2.5"
+                >
+                  <Text className="text-sm font-semibold text-primary-foreground">Done</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text className="text-sm font-semibold text-foreground">Reset password?</Text>
+                <Text className="text-xs text-muted-foreground">
+                  This immediately invalidates {resetFor?.name}'s current password and generates a new temporary
+                  one for you to hand off to them.
+                </Text>
+                <View className="flex-row justify-end gap-3">
+                  <Pressable onPress={() => setResetFor(null)} className="px-3 py-2">
+                    <Text className="text-sm text-muted-foreground">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={resetPassword}
+                    disabled={isResetting}
+                    className="rounded-xl bg-primary px-4 py-2"
+                  >
+                    <Text className="text-sm font-semibold text-primary-foreground">
+                      {isResetting ? "Resetting…" : "Reset password"}
                     </Text>
                   </Pressable>
                 </View>

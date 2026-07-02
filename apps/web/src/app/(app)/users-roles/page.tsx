@@ -1,10 +1,10 @@
 "use client";
 
-import { Button } from "@CMLP/ui/components/button";
 import { cn } from "@CMLP/ui/lib/utils";
-import { UserPlus, Users } from "lucide-react";
+import { Users } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InviteUserDialog } from "@/components/invite-user-dialog";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
@@ -56,10 +56,7 @@ export default function UsersRolesPage() {
             {staff.length} staff accounts · {activeCount} active
           </p>
         </div>
-        <Button>
-          <UserPlus />
-          Invite user
-        </Button>
+        <InviteUserDialog onSaved={refetch} />
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">

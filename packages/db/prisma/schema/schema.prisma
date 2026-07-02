@@ -58,12 +58,20 @@ model User {
   role         StaffRole @default(PARALEGAL)
   isActive     Boolean   @default(true)
   lastActiveAt DateTime?
+  avatarKey    String? // Cloudflare R2 object key for the profile photo
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  // Notification preferences — real, persisted settings even though not every underlying
+  // event (e.g. OCR) is actually implemented yet.
+  notifyOnCaseUpload   Boolean @default(true)
+  notifyOnOcrComplete  Boolean @default(true)
+  notifyWeeklyDigest   Boolean @default(false)
 
   clientsAsAttorney Client[]        @relation("ClientAttorneyOfRecord")
   casesAsLead       Case[]          @relation("CaseLeadAttorney")
   documentsUploaded Document[]      @relation("DocumentUploadedBy")
+  documentsDeleted  Document[]      @relation("DocumentDeletedBy")
   auditEntries      AuditLogEntry[] @relation("AuditActor")
 
   @@map("users")
@@ -158,6 +166,8 @@ model Document {
   uploadedById String
   uploadedBy   User           @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
   deletedAt    DateTime?
+  deletedById  String?
+  deletedBy    User?          @relation("DocumentDeletedBy", fields: [deletedById], references: [id])
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 

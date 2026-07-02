@@ -1,4 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
+import { useThemeColor } from "heroui-native";
 import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
@@ -6,6 +8,7 @@ import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
+import { useAppDrawer } from "@/contexts/drawer-context";
 import { useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
 
@@ -20,13 +23,22 @@ type DocumentRow = {
 export default function DocsScreen() {
   const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>("/documents");
   const documents = data?.documents ?? [];
+  const foreground = useThemeColor("foreground");
+  const { open } = useAppDrawer();
 
   return (
     <Container className="px-5 pt-3">
-      <Text className="font-serif text-xl font-semibold text-foreground">Documents</Text>
-      <Text className="mt-0.5 text-xs text-muted-foreground">
-        {documents.length} documents across all clients and cases
-      </Text>
+      <View className="flex-row items-center justify-between">
+        <View>
+          <Text className="font-serif text-xl font-semibold text-foreground">Documents</Text>
+          <Text className="mt-0.5 text-xs text-muted-foreground">
+            {documents.length} documents across all clients and cases
+          </Text>
+        </View>
+        <Pressable hitSlop={8} onPress={open}>
+          <Ionicons name="menu" size={22} color={foreground} />
+        </Pressable>
+      </View>
 
       {isLoading ? (
         <LoadingState label="Loading documents…" />

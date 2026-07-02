@@ -9,6 +9,7 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
 import { useAuth } from "@/contexts/auth-context";
+import { useAppDrawer } from "@/contexts/drawer-context";
 import { useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
 
@@ -33,6 +34,7 @@ function greeting() {
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { open } = useAppDrawer();
   const foreground = useThemeColor("foreground");
   const muted = useThemeColor("muted");
   const firstName = user?.name.split(" ")[0] ?? "there";
@@ -45,9 +47,14 @@ export default function HomeScreen() {
     <Container className="px-5 pt-3">
       {/* Header */}
       <View className="flex-row items-center justify-between">
-        <View>
-          <Text className="text-xs text-muted-foreground">{greeting()}</Text>
-          <Text className="font-serif text-xl font-semibold text-foreground">{firstName}</Text>
+        <View className="flex-row items-center gap-3">
+          <Pressable hitSlop={8} onPress={open}>
+            <Ionicons name="menu" size={22} color={foreground} />
+          </Pressable>
+          <View>
+            <Text className="text-xs text-muted-foreground">{greeting()}</Text>
+            <Text className="font-serif text-xl font-semibold text-foreground">{firstName}</Text>
+          </View>
         </View>
         <View className="flex-row items-center gap-3">
           <Pressable

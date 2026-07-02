@@ -5,8 +5,10 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
+import { AppDrawer } from "@/components/app-drawer";
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { DrawerProvider } from "@/contexts/drawer-context";
 
 function BootSplash() {
   return (
@@ -26,26 +28,36 @@ function RootNavigator() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: background },
-        headerTintColor: foreground,
-        headerTitleStyle: { fontWeight: "600" },
-      }}
-    >
-      <Stack.Protected guard={!isSignedIn}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={isSignedIn}>
-        <Stack.Screen name="(app)" options={{ headerShown: false }} />
-        <Stack.Screen name="client/[id]" options={{ headerBackTitle: "Cases" }} />
-        <Stack.Screen name="case/[id]" options={{ headerBackTitle: "Back" }} />
-        <Stack.Screen name="scan-review" options={{ headerBackTitle: "Scan" }} />
-        <Stack.Screen name="scan-assign" options={{ headerBackTitle: "Back" }} />
-        <Stack.Screen name="upload-queue" options={{ headerBackTitle: "Back" }} />
-        <Stack.Screen name="doc/[id]" options={{ headerBackTitle: "Back" }} />
-      </Stack.Protected>
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: background },
+          headerTintColor: foreground,
+          headerTitleStyle: { fontWeight: "600" },
+        }}
+      >
+        <Stack.Protected guard={!isSignedIn}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={isSignedIn}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+          <Stack.Screen name="client/[id]" options={{ headerBackTitle: "Clients" }} />
+          <Stack.Screen name="case/[id]" options={{ headerBackTitle: "Back" }} />
+          <Stack.Screen name="scan-review" options={{ headerBackTitle: "Scan" }} />
+          <Stack.Screen name="scan-assign" options={{ headerBackTitle: "Back" }} />
+          <Stack.Screen name="upload-queue" options={{ headerBackTitle: "Back" }} />
+          <Stack.Screen name="doc/[id]" options={{ headerBackTitle: "Back" }} />
+          <Stack.Screen name="clients" options={{ title: "Clients" }} />
+          <Stack.Screen name="folders-tags" options={{ title: "Folders & Tags" }} />
+          <Stack.Screen name="audit-log" options={{ title: "Audit Log" }} />
+          <Stack.Screen name="users-roles" options={{ title: "Users & Roles" }} />
+          <Stack.Screen name="settings" options={{ title: "Settings" }} />
+          <Stack.Screen name="trash" options={{ title: "Trash" }} />
+          <Stack.Screen name="downloads" options={{ title: "Downloads" }} />
+        </Stack.Protected>
+      </Stack>
+      {isSignedIn ? <AppDrawer /> : null}
+    </View>
   );
 }
 
@@ -56,7 +68,9 @@ export default function Layout() {
         <AppThemeProvider>
           <HeroUINativeProvider>
             <AuthProvider>
-              <RootNavigator />
+              <DrawerProvider>
+                <RootNavigator />
+              </DrawerProvider>
             </AuthProvider>
           </HeroUINativeProvider>
         </AppThemeProvider>

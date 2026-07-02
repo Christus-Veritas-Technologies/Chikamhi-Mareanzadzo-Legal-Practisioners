@@ -1,12 +1,15 @@
 import { Stack } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { useApi } from "@/hooks/use-api";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type AuditEntry = {
   id: string;
@@ -47,15 +50,28 @@ function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
 
+const PAGE_SIZE = 50;
+
 export default function AuditLogScreen() {
   const [actionFilter, setActionFilter] = useState<string | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
-  const { data: allData } = useApi<{ entries: AuditEntry[] }>("/audit-log");
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [actionFilter]);
+
+  // Unfiltered baseline (large limit) so the action chips don't shrink as filters are applied.
+  const { data: allData } = useApi<{ entries: AuditEntry[] }>("/audit-log?limit=500");
   const allEntries = allData?.entries ?? [];
   const actions = Array.from(new Set(allEntries.map((e) => e.action)));
 
-  const path = actionFilter ? `/audit-log?action=${actionFilter}` : "/audit-log";
-  const { data, isLoading, error, refetch } = useApi<{ entries: AuditEntry[] }>(path, [path]);
+  const params = new URLSearchParams();
+  if (actionFilter) params.set("action", actionFilter);
+  params.set("limit", String(limit));
+  const path = `/audit-log?${params.toString()}`;
+  const { data, isLoading, error, refetch } = useApi<{ entries: AuditEntry[]; pagination: Pagination }>(path, [
+    path,
+  ]);
   const entries = data?.entries ?? [];
 
   return (
@@ -122,6 +138,14 @@ export default function AuditLogScreen() {
               <Text className="mt-0.5 text-[11px] text-muted-foreground">{entry.timestamp}</Text>
             </View>
           ))}
+          {data?.pagination ? (
+            <LoadMoreButton
+              shown={entries.length}
+              total={data.pagination.total}
+              onPress={() => setLimit((l) => l + PAGE_SIZE)}
+              loading={isLoading}
+            />
+          ) : null}
         </View>
       )}
     </Container>

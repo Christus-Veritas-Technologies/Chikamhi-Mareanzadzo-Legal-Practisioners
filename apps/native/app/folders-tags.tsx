@@ -15,7 +15,9 @@ type Folder = { id: string; name: string; documentCount: number };
 type Tag = { id: string; name: string; colorClass: string; documentCount: number };
 
 export default function FoldersTagsScreen() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // Creating/renaming folders and tags is admin-only server-side — mirror that here.
+  const isAdmin = user?.role === "ADMIN";
   const {
     data: foldersData,
     isLoading: foldersLoading,
@@ -109,7 +111,7 @@ export default function FoldersTagsScreen() {
             ))
           )}
 
-          {addingFolder ? (
+          {!isAdmin ? null : addingFolder ? (
             <View className="flex-row items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2">
               <TextInput
                 autoFocus
@@ -140,9 +142,11 @@ export default function FoldersTagsScreen() {
 
       <View className="mt-6 flex-row items-center justify-between">
         <Text className="text-sm font-medium text-foreground">Tags</Text>
-        <Pressable onPress={addTag} disabled={isSavingTag}>
-          <Text className="text-xs font-semibold text-brand">{isSavingTag ? "Adding…" : "+ New tag"}</Text>
-        </Pressable>
+        {isAdmin ? (
+          <Pressable onPress={addTag} disabled={isSavingTag}>
+            <Text className="text-xs font-semibold text-brand">{isSavingTag ? "Adding…" : "+ New tag"}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {tagsLoading ? (
@@ -175,9 +179,11 @@ export default function FoldersTagsScreen() {
               </View>
               <View className="flex-row items-center gap-3">
                 <Text className="text-xs text-muted-foreground">{tag.documentCount} docs</Text>
-                <Pressable onPress={() => startEditingTag(tag)} hitSlop={6}>
-                  <Ionicons name="pencil-outline" size={14} color="#8A8378" />
-                </Pressable>
+                {isAdmin ? (
+                  <Pressable onPress={() => startEditingTag(tag)} hitSlop={6}>
+                    <Ionicons name="pencil-outline" size={14} color="#8A8378" />
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           ))}

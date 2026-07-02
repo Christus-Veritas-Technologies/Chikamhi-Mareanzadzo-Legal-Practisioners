@@ -4,6 +4,7 @@ import { Modal, Pressable, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { useAuth } from "@/contexts/auth-context";
@@ -11,6 +12,8 @@ import { useApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/api";
 import { formatStatus } from "@/lib/format-status";
 import { relativeTime } from "@/lib/format-time";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type StaffMember = {
   id: string;
@@ -28,9 +31,16 @@ function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
 
+const PAGE_SIZE = 25;
+
 export default function UsersRolesScreen() {
-  const { token } = useAuth();
-  const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[] }>("/users");
+  const { token, user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "ADMIN";
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[]; pagination: Pagination }>(
+    `/users?limit=${limit}`,
+    [limit],
+  );
   const staff = data?.users ?? [];
   const activeCount = staff.filter((s) => s.isActive).length;
 
@@ -77,11 +87,13 @@ export default function UsersRolesScreen() {
 
       <View className="flex-row items-center justify-between">
         <Text className="text-xs text-muted-foreground">
-          {staff.length} staff accounts · {activeCount} active
+          {data?.pagination.total ?? staff.length} staff accounts · {activeCount} active
         </Text>
-        <Pressable onPress={() => setShowInvite(true)}>
-          <Text className="text-xs font-semibold text-brand">+ Invite</Text>
-        </Pressable>
+        {isAdmin ? (
+          <Pressable onPress={() => setShowInvite(true)}>
+            <Text className="text-xs font-semibold text-brand">+ Invite</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {isLoading ? (
@@ -111,31 +123,49 @@ export default function UsersRolesScreen() {
               </View>
 
               <View className="mt-2.5 flex-row items-center justify-between">
-                <Pressable
-                  onPress={() => setRolePickerFor(member)}
-                  className="rounded-full border border-border px-2.5 py-1"
-                >
-                  <Text className="text-[11px] text-foreground">{formatStatus(member.role)}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => toggleActive(member.id, member.isActive)}
-                  className="flex-row items-center gap-1.5"
-                >
-                  <View
-                    className={`h-4 w-7 items-center rounded-full px-0.5 ${member.isActive ? "items-end bg-success" : "items-start bg-muted"}`}
+                {isAdmin ? (
+                  <Pressable
+                    onPress={() => setRolePickerFor(member)}
+                    className="rounded-full border border-border px-2.5 py-1"
                   >
-                    <View className="h-3 w-3 rounded-full bg-white" />
-                  </View>
+                    <Text className="text-[11px] text-foreground">{formatStatus(member.role)}</Text>
+                  </Pressable>
+                ) : (
+                  <Text className="text-[11px] text-foreground">{formatStatus(member.role)}</Text>
+                )}
+                {isAdmin ? (
+                  <Pressable
+                    onPress={() => toggleActive(member.id, member.isActive)}
+                    className="flex-row items-center gap-1.5"
+                  >
+                    <View
+                      className={`h-4 w-7 items-center rounded-full px-0.5 ${member.isActive ? "items-end bg-success" : "items-start bg-muted"}`}
+                    >
+                      <View className="h-3 w-3 rounded-full bg-white" />
+                    </View>
+                    <Text className={`text-[11px] ${member.isActive ? "text-success" : "text-muted-foreground"}`}>
+                      {member.isActive ? "Active" : "Suspended"}
+                    </Text>
+                  </Pressable>
+                ) : (
                   <Text className={`text-[11px] ${member.isActive ? "text-success" : "text-muted-foreground"}`}>
                     {member.isActive ? "Active" : "Suspended"}
                   </Text>
-                </Pressable>
+                )}
                 <Text className="text-[11px] text-muted-foreground">
                   {member.lastActive ? relativeTime(member.lastActive) : "Never"}
                 </Text>
               </View>
             </View>
           ))}
+          {data?.pagination ? (
+            <LoadMoreButton
+              shown={staff.length}
+              total={data.pagination.total}
+              onPress={() => setLimit((l) => l + PAGE_SIZE)}
+              loading={isLoading}
+            />
+          ) : null}
         </View>
       )}
 

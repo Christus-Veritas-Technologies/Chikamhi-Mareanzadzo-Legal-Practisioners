@@ -5,11 +5,14 @@ import { Alert, Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/api";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type TrashedDoc = {
   id: string;
@@ -21,9 +24,16 @@ type TrashedDoc = {
   purgesInDays: number;
 };
 
+const PAGE_SIZE = 25;
+
 export default function TrashScreen() {
-  const { token } = useAuth();
-  const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[] }>("/documents/trash");
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[]; pagination: Pagination }>(
+    `/documents/trash?limit=${limit}`,
+    [limit],
+  );
   const items = data?.documents ?? [];
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -96,16 +106,26 @@ export default function TrashScreen() {
                 >
                   <Text className="text-xs font-medium text-foreground">Restore</Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => confirmDelete(item.id, item.name)}
-                  disabled={pendingId === item.id}
-                  className="flex-1 items-center rounded-lg bg-destructive/10 py-2"
-                >
-                  <Text className="text-xs font-medium text-destructive">Delete</Text>
-                </Pressable>
+                {isAdmin ? (
+                  <Pressable
+                    onPress={() => confirmDelete(item.id, item.name)}
+                    disabled={pendingId === item.id}
+                    className="flex-1 items-center rounded-lg bg-destructive/10 py-2"
+                  >
+                    <Text className="text-xs font-medium text-destructive">Delete</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           ))}
+          {data?.pagination ? (
+            <LoadMoreButton
+              shown={items.length}
+              total={data.pagination.total}
+              onPress={() => setLimit((l) => l + PAGE_SIZE)}
+              loading={isLoading}
+            />
+          ) : null}
         </View>
       )}
     </Container>

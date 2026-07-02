@@ -9,7 +9,7 @@ import {
   InputGroupInput,
 } from "@CMLP/ui/components/input-group";
 import { Label } from "@CMLP/ui/components/label";
-import { AlertTriangle, Eye, EyeOff, Loader2, Lock, ShieldCheck, User } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Loader2, Lock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -158,14 +158,6 @@ export default function SignInPage() {
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
-
-          <button
-            type="button"
-            className="mt-4 flex w-full items-center justify-center gap-1.5 text-xs font-medium text-brand hover:underline"
-          >
-            <ShieldCheck className="size-3.5" />
-            Unlock with biometrics
-          </button>
 
           <p className="mt-8 text-center text-[11px] text-muted-foreground">
             Access is restricted to firm staff.

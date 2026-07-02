@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
+import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
 
 type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
@@ -53,6 +54,20 @@ function initials(name: string) {
 const PAGE_SIZE = 50;
 
 export default function AuditLogScreen() {
+  const { user } = useAuth();
+  // Attorney-only — the API would 403 anyway, but this avoids a confusing error state.
+  if (user?.role !== "ATTORNEY") {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Audit Log" }} />
+        <EmptyState icon="lock-closed-outline" title="Attorneys only" description="The Audit Log is only available to attorneys." />
+      </Container>
+    );
+  }
+  return <AuditLogContent />;
+}
+
+function AuditLogContent() {
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
 

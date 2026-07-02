@@ -2,28 +2,48 @@
 
 import { Button } from "@CMLP/ui/components/button";
 import { cn } from "@CMLP/ui/lib/utils";
-import { AlertCircle, CheckCircle2, FileText, Plus, RotateCcw, UploadCloud, X } from "lucide-react";
+import {
+  AlertCircle,
+  Briefcase,
+  CheckCircle2,
+  FileText,
+  Folder,
+  MapPin,
+  Plus,
+  RotateCcw,
+  UploadCloud,
+  Users,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  type CaseOption,
+  type ClientOption,
+  type Destination,
+  DestinationPicker,
+  EMPTY_DESTINATION,
+  type FolderOption,
+} from "@/components/destination-picker";
 import { apiFetch, useApi } from "@/hooks/use-api";
 
 type QueueItem = {
   id: string;
   documentId?: string;
   name: string;
-  fileType: string;
   file: File;
   state: "ready" | "uploading" | "done" | "failed";
-  clientId?: string;
-  caseId?: string;
+  destination: Destination;
+  // True once this item's destination has been changed independently of the shared
+  // (global) destination — from then on, changing the global destination no longer
+  // overwrites this item, matching the "shared by default, per-file override" behavior.
+  overridden: boolean;
   tagIds: string[];
   errorMessage?: string;
   tagPickerOpen?: boolean;
 };
 
-type ClientOption = { id: string; name: string };
-type CaseOption = { id: string; title: string; client: { id: string } };
 type TagOption = { id: string; name: string };
 
 function extToFileType(name: string) {
@@ -31,25 +51,40 @@ function extToFileType(name: string) {
   return ext;
 }
 
+function destinationSummary(d: Destination): string {
+  if (!d.clientId) return "";
+  const parts = [d.clientName, d.caseTitle ?? "Unfiled"];
+  const label = parts.join(" → ");
+  return d.folderName ? `${label} · 📁 ${d.folderName}` : label;
+}
+
 export default function UploadPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isFiling, setIsFiling] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const [globalDestination, setGlobalDestination] = useState<Destination>(EMPTY_DESTINATION);
+  const [globalPickerOpen, setGlobalPickerOpen] = useState(false);
+  const [perItemPickerId, setPerItemPickerId] = useState<string | null>(null);
 
   const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
   const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const { data: foldersData } = useApi<{ folders: FolderOption[] }>("/folders");
   const { data: tagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const clients = clientsData?.clients ?? [];
   const cases = casesData?.cases ?? [];
+  const folders = foldersData?.folders ?? [];
   const tags = tagsData?.tags ?? [];
 
-  function handleFilesSelected(files: FileList | null) {
+  function addFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     const items: QueueItem[] = Array.from(files).map((file, i) => ({
-      id: `${Date.now()}-${i}`,
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
       name: file.name,
-      fileType: extToFileType(file.name),
       file,
       state: "ready",
+      destination: globalDestination,
+      overridden: false,
       tagIds: [],
     }));
     setQueue((q) => [...q, ...items]);
@@ -63,14 +98,28 @@ export default function UploadPage() {
     updateItem(id, { state: "ready", errorMessage: undefined });
   }
 
+  // Applying a new global destination re-syncs every item that hasn't been individually
+  // overridden — items with their own destination are left alone.
+  function applyGlobalDestination(next: Destination) {
+    setGlobalDestination(next);
+    setQueue((q) => q.map((item) => (item.overridden ? item : { ...item, destination: next })));
+  }
+
+  function applyItemDestination(id: string, next: Destination) {
+    updateItem(id, { destination: next, overridden: true });
+  }
+
   const readyCount = queue.filter((i) => i.state === "ready").length;
+  const readyMissingDestination = queue.filter((i) => i.state === "ready" && !i.destination.clientId).length;
   const needsAttention = queue.filter((i) => i.state === "failed").length;
 
   async function fileAll() {
     setIsFiling(true);
+    let succeeded = 0;
+    let failed = 0;
     try {
       for (const item of queue) {
-        if (item.state !== "ready" || !item.clientId) continue;
+        if (item.state !== "ready" || !item.destination.clientId) continue;
         updateItem(item.id, { state: "uploading" });
         try {
           const { document, uploadUrl } = await apiFetch<{
@@ -80,28 +129,34 @@ export default function UploadPage() {
             method: "POST",
             body: JSON.stringify({
               name: item.name,
-              // Recomputed from the (possibly user-edited) name rather than the fileType
-              // captured at drop time, so renaming the extension keeps this in sync.
+              // Recomputed from the (possibly user-edited) name rather than a value cached
+              // at drop time, so renaming the extension keeps this in sync.
               fileType: extToFileType(item.name),
-              clientId: item.clientId,
-              caseId: item.caseId || undefined,
+              clientId: item.destination.clientId,
+              caseId: item.destination.caseId || undefined,
+              folderId: item.destination.folderId || undefined,
               contentType: item.file.type || undefined,
               sizeBytes: item.file.size || undefined,
             }),
           });
 
           // If R2 is configured, uploadUrl is a presigned PUT URL — push the actual bytes
-          // straight to storage from the browser. Otherwise this stays a metadata-only record.
+          // straight to storage from the browser. Otherwise this stays a metadata-only
+          // record (no bytes stored) and the document viewer will say so explicitly.
           if (uploadUrl) {
             const putRes = await fetch(uploadUrl, {
               method: "PUT",
               headers: { "Content-Type": item.file.type || "application/octet-stream" },
               body: item.file,
             });
-            if (!putRes.ok) throw new Error("File upload to storage failed.");
+            if (!putRes.ok) {
+              throw new Error(
+                `Upload to storage failed (${putRes.status}). If this keeps happening, the storage bucket's CORS policy likely needs to allow PUT requests from this app's origin.`,
+              );
+            }
 
-            // Tells the server the bytes have actually landed in R2 — that's what kicks off
-            // OCR for eligible file types. Best-effort: OCR just won't run if this fails.
+            // Tells the server the bytes have actually landed in storage — that's what kicks
+            // off OCR for eligible file types. Best-effort: OCR just won't run if this fails.
             await apiFetch(`/documents/${document.id}/confirm-upload`, { method: "POST" }).catch(() => {});
           }
 
@@ -113,14 +168,25 @@ export default function UploadPage() {
           }
 
           updateItem(item.id, { state: "done", documentId: document.id });
+          succeeded += 1;
         } catch (err) {
           updateItem(item.id, {
             state: "failed",
             errorMessage: err instanceof Error ? err.message : "Upload failed.",
           });
+          failed += 1;
         }
       }
-      toast.success("Documents filed.");
+
+      // Report what actually happened instead of a blanket "success" — a failed item is
+      // still visible inline with a Retry button, but the toast shouldn't contradict it.
+      if (failed === 0 && succeeded > 0) {
+        toast.success(succeeded === 1 ? "Document filed." : `${succeeded} documents filed.`);
+      } else if (succeeded > 0 && failed > 0) {
+        toast.warning(`${succeeded} filed, ${failed} failed — see the queue below.`);
+      } else if (failed > 0) {
+        toast.error(failed === 1 ? "Upload failed." : `${failed} uploads failed — see the queue below.`);
+      }
     } finally {
       setIsFiling(false);
     }
@@ -149,16 +215,67 @@ export default function UploadPage() {
     }
   }
 
+  const perItemPickerTarget = queue.find((i) => i.id === perItemPickerId);
+
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Upload & import</h1>
         <p className="text-sm text-muted-foreground">
-          Add documents from your device or a mobile scan. Assign each to a client and case before filing.
+          Add documents from your device or a mobile scan, then choose where they're filed.
         </p>
       </div>
 
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center hover:bg-muted/50">
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Destination</p>
+            {globalDestination.clientId ? (
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="flex items-center gap-1 font-medium text-foreground">
+                  <Users className="size-3 text-muted-foreground" />
+                  {globalDestination.clientName}
+                </span>
+                <span className="flex items-center gap-1 text-foreground">
+                  <Briefcase className="size-3 text-muted-foreground" />
+                  {globalDestination.caseTitle ?? "Unfiled"}
+                </span>
+                {globalDestination.folderId ? (
+                  <span className="flex items-center gap-1 text-foreground">
+                    <Folder className="size-3 text-muted-foreground" />
+                    {globalDestination.folderName}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No destination chosen yet — pick one to apply it to every file you add below.
+              </p>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setGlobalPickerOpen(true)}>
+            <MapPin />
+            {globalDestination.clientId ? "Change destination" : "Choose destination"}
+          </Button>
+        </div>
+      </div>
+
+      <label
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={() => setIsDraggingOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(false);
+          addFiles(e.dataTransfer.files);
+        }}
+        className={cn(
+          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center transition-colors",
+          isDraggingOver ? "border-brand bg-brand-muted/40" : "border-border bg-muted/30 hover:bg-muted/50",
+        )}
+      >
         <UploadCloud className="size-6 text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">Drag documents here</p>
         <p className="text-xs text-muted-foreground">PDF, DOCX, XLSX, JPG or PNG · up to 50 MB each</p>
@@ -170,7 +287,7 @@ export default function UploadPage() {
           multiple
           className="hidden"
           onChange={(e) => {
-            handleFilesSelected(e.target.files);
+            addFiles(e.target.files);
             e.target.value = "";
           }}
         />
@@ -230,32 +347,19 @@ export default function UploadPage() {
                     </Button>
                   </div>
                 ) : item.state === "ready" ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <select
-                      value={item.clientId ?? ""}
-                      onChange={(e) => updateItem(item.id, { clientId: e.target.value, caseId: undefined })}
-                      className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                    {item.destination.clientId ? (
+                      <span className="text-muted-foreground">{destinationSummary(item.destination)}</span>
+                    ) : (
+                      <span className="text-destructive">No destination chosen</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPerItemPickerId(item.id)}
+                      className="font-medium text-brand hover:underline"
                     >
-                      <option value="">Select client…</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={item.caseId ?? ""}
-                      onChange={(e) => updateItem(item.id, { caseId: e.target.value })}
-                      className="py-1.5 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
-                      disabled={!item.clientId}
-                    >
-                      <option value="">Select case…</option>
-                      {cases.filter((c) => c.client.id === item.clientId).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.title}
-                        </option>
-                      ))}
-                    </select>
+                      {item.destination.clientId ? "Change" : "Choose"}
+                    </button>
                   </div>
                 ) : null}
 
@@ -318,16 +422,45 @@ export default function UploadPage() {
             ))}
           </div>
 
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setQueue([])}>
-              Cancel
-            </Button>
-            <Button onClick={fileAll} disabled={isFiling || readyCount === 0}>
-              {isFiling ? "Filing…" : `File ${readyCount} documents`}
-            </Button>
+          <div className="mt-4 flex flex-col items-end gap-1.5">
+            {readyCount > 0 && readyMissingDestination > 0 ? (
+              <p className="text-[11px] text-destructive">
+                {readyMissingDestination} file{readyMissingDestination === 1 ? "" : "s"} still need a destination.
+              </p>
+            ) : null}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setQueue([])}>
+                Cancel
+              </Button>
+              <Button onClick={fileAll} disabled={isFiling || readyCount === 0 || readyMissingDestination > 0}>
+                {isFiling ? "Filing…" : `File ${readyCount} documents`}
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      <DestinationPicker
+        open={globalPickerOpen}
+        onOpenChange={setGlobalPickerOpen}
+        value={globalDestination}
+        onChange={applyGlobalDestination}
+        clients={clients}
+        cases={cases}
+        folders={folders}
+      />
+
+      {perItemPickerTarget ? (
+        <DestinationPicker
+          open={Boolean(perItemPickerId)}
+          onOpenChange={(open) => !open && setPerItemPickerId(null)}
+          value={perItemPickerTarget.destination}
+          onChange={(next) => applyItemDestination(perItemPickerTarget.id, next)}
+          clients={clients}
+          cases={cases}
+          folders={folders}
+        />
+      ) : null}
     </div>
   );
 }

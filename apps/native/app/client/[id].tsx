@@ -1,12 +1,17 @@
-import { Link, Stack, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Link, Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { AlertDialog, ConfirmDialog } from "@/components/confirm-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
+import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/api";
 import { formatStatus } from "@/lib/format-status";
 
 type ClientDetail = {
@@ -35,8 +40,28 @@ function initials(name: string) {
 
 export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { token } = useAuth();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data, isLoading, error, refetch } = useApi<{ client: ClientDetail }>(`/clients/${id}`);
   const client = data?.client;
+
+  async function deleteClient(deleteCases: boolean) {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/clients/${id}`, { method: "DELETE", body: { deleteCases }, token });
+      setDeleteOpen(false);
+      router.replace("/clients");
+    } catch (err) {
+      setDeleteOpen(false);
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete client.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -81,6 +106,9 @@ export default function ClientDetailScreen() {
             {client.type} · Attorney: {client.attorneyOfRecord}
           </Text>
         </View>
+        <Pressable onPress={() => setDeleteOpen(true)} hitSlop={8} className="p-1">
+          <Ionicons name="trash-outline" size={18} color="#B3413A" />
+        </Pressable>
       </View>
 
       <View className="mt-4 flex-row gap-3">
@@ -121,6 +149,28 @@ export default function ClientDetailScreen() {
           ))}
         </View>
       )}
+
+      <ConfirmDialog
+        visible={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this client?"
+        description={`${client.name} will be moved to Trash and can be restored within 30 days.`}
+        cascadeLabel={
+          cases.length > 0
+            ? `Also delete the ${cases.length} case${cases.length === 1 ? "" : "s"} inside this client`
+            : undefined
+        }
+        confirmLabel="Delete client"
+        destructive
+        isLoading={isDeleting}
+        onConfirm={deleteClient}
+      />
+      <AlertDialog
+        visible={Boolean(deleteError)}
+        onOpenChange={(open) => !open && setDeleteError(null)}
+        title="Couldn't delete client"
+        description={deleteError ?? undefined}
+      />
     </Container>
   );
 }

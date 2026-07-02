@@ -4,12 +4,13 @@ import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
 import { Activity, Contact, FileText, Trash2, UserX } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { CaseFormDialog } from "@/components/case-form-dialog";
 import { ClientFormDialog } from "@/components/client-form-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ContactFormDialog } from "@/components/contact-form-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
@@ -78,7 +79,10 @@ function initials(name: string) {
 
 export default function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("cases");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data, isLoading, error, refetch } = useApi<{ client: ClientDetail }>(`/clients/${clientId}`);
   const client = data?.client;
@@ -131,6 +135,23 @@ export default function ClientDetailPage() {
     }
   }
 
+  async function deleteClient(deleteCases: boolean) {
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/clients/${clientId}`, {
+        method: "DELETE",
+        body: JSON.stringify({ deleteCases }),
+      });
+      toast.success("Client moved to trash.");
+      router.push("/clients");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete client.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <p className="text-xs text-muted-foreground">
@@ -168,6 +189,10 @@ export default function ClientDetailPage() {
             trigger={<Button variant="outline">Edit client</Button>}
           />
           <CaseFormDialog clientId={client.id} onSaved={refetch} trigger={<Button>New case</Button>} />
+          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 />
+            Delete client
+          </Button>
         </div>
       </div>
 
@@ -355,6 +380,22 @@ export default function ClientDetailPage() {
           </div>
         )
       ) : null}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this client?"
+        description={`${client.name} will be moved to Trash and can be restored within 30 days.`}
+        cascadeLabel={
+          cases.length > 0
+            ? `Also delete the ${cases.length} case${cases.length === 1 ? "" : "s"} inside this client`
+            : undefined
+        }
+        confirmLabel="Delete client"
+        destructive
+        isLoading={isDeleting}
+        onConfirm={deleteClient}
+      />
     </div>
   );
 }

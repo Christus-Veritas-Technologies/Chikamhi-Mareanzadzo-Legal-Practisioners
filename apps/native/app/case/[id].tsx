@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/container";
+import { AlertDialog, ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
@@ -47,7 +48,11 @@ type CaseDetail = {
 
 export default function CaseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [docFilter, setDocFilter] = useState<DocFilter>("all");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { token } = useAuth();
   const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${id}`);
@@ -93,6 +98,21 @@ export default function CaseDetailScreen() {
     refetchDeadlines();
   }
 
+  async function deleteCase(deleteDocuments: boolean) {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/cases/${id}`, { method: "DELETE", body: { deleteDocuments }, token });
+      setDeleteOpen(false);
+      router.replace(matter?.client ? `/client/${matter.client.id}` : "/cases");
+    } catch (err) {
+      setDeleteOpen(false);
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete case.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const filteredDocs = useMemo(() => {
     const documents = matter?.documents ?? [];
     if (docFilter === "all") return documents;
@@ -132,14 +152,21 @@ export default function CaseDetailScreen() {
     <Container className="px-5 pt-3">
       <Stack.Screen options={{ title: matter.caseNumber }} />
 
-      <View className="flex-row items-center gap-2">
-        <Text className="text-[11px] text-muted-foreground">{matter.caseNumber}</Text>
-        <StatusPill status={formatStatus(matter.status)} />
+      <View className="flex-row items-start justify-between gap-2">
+        <View className="flex-1">
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[11px] text-muted-foreground">{matter.caseNumber}</Text>
+            <StatusPill status={formatStatus(matter.status)} />
+          </View>
+          <Text className="mt-1 font-serif text-lg font-semibold text-foreground">{matter.title}</Text>
+          {matter.client ? (
+            <Text className="text-xs text-muted-foreground">{matter.client.name}</Text>
+          ) : null}
+        </View>
+        <Pressable onPress={() => setDeleteOpen(true)} hitSlop={8} className="mt-1 p-1">
+          <Ionicons name="trash-outline" size={18} color="#B3413A" />
+        </Pressable>
       </View>
-      <Text className="mt-1 font-serif text-lg font-semibold text-foreground">{matter.title}</Text>
-      {matter.client ? (
-        <Text className="text-xs text-muted-foreground">{matter.client.name}</Text>
-      ) : null}
 
       <View className="mt-4 flex-row flex-wrap gap-x-6 gap-y-2 border-y border-border py-3">
         <View>
@@ -279,6 +306,28 @@ export default function CaseDetailScreen() {
           ))}
         </View>
       )}
+
+      <ConfirmDialog
+        visible={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this case?"
+        description={`${matter.title} will be moved to Trash and can be restored within 30 days.`}
+        cascadeLabel={
+          matter.documents.length > 0
+            ? `Also delete the ${matter.documents.length} document${matter.documents.length === 1 ? "" : "s"} inside this case`
+            : undefined
+        }
+        confirmLabel="Delete case"
+        destructive
+        isLoading={isDeleting}
+        onConfirm={deleteCase}
+      />
+      <AlertDialog
+        visible={Boolean(deleteError)}
+        onOpenChange={(open) => !open && setDeleteError(null)}
+        title="Couldn't delete case"
+        description={deleteError ?? undefined}
+      />
     </Container>
   );
 }

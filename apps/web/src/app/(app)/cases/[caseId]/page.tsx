@@ -5,11 +5,12 @@ import { Card, CardContent } from "@CMLP/ui/components/card";
 import { Input } from "@CMLP/ui/components/input";
 import { CalendarClock, Check, FileX2, FolderX, History, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { CaseEditDialog } from "@/components/case-edit-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
@@ -52,7 +53,10 @@ type CaseDetail = {
 
 export default function CaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
+  const router = useRouter();
   const [docFilter, setDocFilter] = useState<DocFilter>("all");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${caseId}`);
   const matter = data?.case;
@@ -96,6 +100,24 @@ export default function CaseDetailPage() {
   async function removeDeadline(id: string) {
     await apiFetch(`/deadlines/${id}`, { method: "DELETE" });
     refetchDeadlines();
+  }
+
+  async function deleteCase(deleteDocuments: boolean) {
+    if (!caseId) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/cases/${caseId}`, {
+        method: "DELETE",
+        body: JSON.stringify({ deleteDocuments }),
+      });
+      toast.success("Case moved to trash.");
+      router.push(matter?.client ? `/clients/${matter.client.id}` : "/cases");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete case.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
   }
 
   const filteredDocs = useMemo(() => {
@@ -178,6 +200,10 @@ export default function CaseDetailPage() {
             <Plus />
             Upload to case
           </Link>
+          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 />
+            Delete case
+          </Button>
         </div>
       </div>
 
@@ -351,6 +377,22 @@ export default function CaseDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this case?"
+        description={`${matter.title} will be moved to Trash and can be restored within 30 days.`}
+        cascadeLabel={
+          documents.length > 0
+            ? `Also delete the ${documents.length} document${documents.length === 1 ? "" : "s"} inside this case`
+            : undefined
+        }
+        confirmLabel="Delete case"
+        destructive
+        isLoading={isDeleting}
+        onConfirm={deleteCase}
+      />
     </div>
   );
 }

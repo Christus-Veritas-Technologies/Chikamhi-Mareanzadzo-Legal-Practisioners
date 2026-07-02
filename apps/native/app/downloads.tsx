@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useFocusEffect } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
+import { AlertDialog, ConfirmDialog } from "@/components/confirm-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { RouteError } from "@/components/route-error";
@@ -17,6 +18,8 @@ function formatBytes(bytes: number) {
 
 export default function DownloadsScreen() {
   const [items, setItems] = useState<DownloadedDoc[]>([]);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<DownloadedDoc | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -27,28 +30,21 @@ export default function DownloadsScreen() {
   async function openFile(item: DownloadedDoc) {
     const available = await Sharing.isAvailableAsync();
     if (!available) {
-      Alert.alert("Can't open file", "Sharing isn't available on this device.");
+      setAlertMessage("Sharing isn't available on this device.");
       return;
     }
     try {
       await Sharing.shareAsync(item.uri);
     } catch {
-      Alert.alert("Can't open file", "This file couldn't be opened.");
+      setAlertMessage("This file couldn't be opened.");
     }
   }
 
-  function confirmRemove(item: DownloadedDoc) {
-    Alert.alert("Remove download?", `"${item.name}" will be deleted from this device.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => {
-          removeDownload(item.id);
-          setItems(listDownloads());
-        },
-      },
-    ]);
+  function removeConfirmed() {
+    if (!removeTarget) return;
+    removeDownload(removeTarget.id);
+    setItems(listDownloads());
+    setRemoveTarget(null);
   }
 
   return (
@@ -86,13 +82,24 @@ export default function DownloadsScreen() {
                   })}
                 </Text>
               </Pressable>
-              <Pressable onPress={() => confirmRemove(item)} hitSlop={8}>
+              <Pressable onPress={() => setRemoveTarget(item)} hitSlop={8}>
                 <Ionicons name="trash-outline" size={16} color="#B3413A" />
               </Pressable>
             </View>
           ))}
         </View>
       )}
+
+      <ConfirmDialog
+        visible={Boolean(removeTarget)}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+        title="Remove download?"
+        description={`"${removeTarget?.name}" will be deleted from this device.`}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={removeConfirmed}
+      />
+      <AlertDialog visible={Boolean(alertMessage)} onOpenChange={(open) => !open && setAlertMessage(null)} title="Can't open file" description={alertMessage ?? undefined} />
     </Container>
   );
 }

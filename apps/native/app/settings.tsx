@@ -3,8 +3,9 @@ import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
 import { useThemeColor } from "heroui-native";
 import { useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
+import { AlertDialog } from "@/components/confirm-dialog";
 import { RouteError } from "@/components/route-error";
 import { useAuth } from "@/contexts/auth-context";
 import { apiFetch } from "@/lib/api";
@@ -32,6 +33,8 @@ export default function SettingsScreen() {
     user?.notifications ?? { caseUpload: true, ocrComplete: true, weeklyDigest: false },
   );
 
+  const [alertInfo, setAlertInfo] = useState<{ title: string; description?: string } | null>(null);
+
   async function saveProfile() {
     if (!name.trim() || !email.trim()) return;
     setIsSavingProfile(true);
@@ -42,9 +45,12 @@ export default function SettingsScreen() {
         token,
       });
       await refreshUser();
-      Alert.alert("Saved", "Profile updated.");
+      setAlertInfo({ title: "Saved", description: "Profile updated." });
     } catch (err) {
-      Alert.alert("Couldn't update profile", err instanceof Error ? err.message : "Please try again.");
+      setAlertInfo({
+        title: "Couldn't update profile",
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
     } finally {
       setIsSavingProfile(false);
     }
@@ -53,7 +59,7 @@ export default function SettingsScreen() {
   async function pickPhoto() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission needed", "Allow photo library access to set a profile photo.");
+      setAlertInfo({ title: "Permission needed", description: "Allow photo library access to set a profile photo." });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -86,10 +92,10 @@ export default function SettingsScreen() {
 
       await refreshUser();
     } catch (err) {
-      Alert.alert(
-        "Couldn't upload photo",
-        err instanceof Error ? err.message : "Is file storage configured?",
-      );
+      setAlertInfo({
+        title: "Couldn't upload photo",
+        description: err instanceof Error ? err.message : "Is file storage configured?",
+      });
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -97,7 +103,7 @@ export default function SettingsScreen() {
 
   async function savePassword() {
     if (newPassword !== confirmPassword) {
-      Alert.alert("Passwords don't match", "New password and confirmation must match.");
+      setAlertInfo({ title: "Passwords don't match", description: "New password and confirmation must match." });
       return;
     }
     setIsSavingPassword(true);
@@ -110,9 +116,12 @@ export default function SettingsScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      Alert.alert("Password changed");
+      setAlertInfo({ title: "Password changed" });
     } catch (err) {
-      Alert.alert("Couldn't change password", err instanceof Error ? err.message : "Please try again.");
+      setAlertInfo({
+        title: "Couldn't change password",
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
     } finally {
       setIsSavingPassword(false);
     }
@@ -125,7 +134,7 @@ export default function SettingsScreen() {
       await apiFetch("/auth/notifications", { method: "PATCH", body: { [key]: next[key] }, token });
     } catch (err) {
       setNotifications(notifications);
-      Alert.alert("Couldn't update", err instanceof Error ? err.message : "Please try again.");
+      setAlertInfo({ title: "Couldn't update", description: err instanceof Error ? err.message : "Please try again." });
     }
   }
 
@@ -244,6 +253,13 @@ export default function SettingsScreen() {
           </View>
         ))}
       </View>
+
+      <AlertDialog
+        visible={Boolean(alertInfo)}
+        onOpenChange={(open) => !open && setAlertInfo(null)}
+        title={alertInfo?.title ?? ""}
+        description={alertInfo?.description}
+      />
     </ScrollView>
   );
 }

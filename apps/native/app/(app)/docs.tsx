@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useThemeColor } from "heroui-native";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { AlertDialog, ConfirmDialog } from "@/components/confirm-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
@@ -52,6 +53,8 @@ export default function DocsScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPicker, setBulkPicker] = useState<"tag" | "move" | null>(null);
   const [isBulkWorking, setIsBulkWorking] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   function toggleSelectMode() {
     setSelectMode((s) => !s);
@@ -81,7 +84,7 @@ export default function DocsScreen() {
       setSelectMode(false);
       refetch();
     } catch {
-      Alert.alert("Couldn't apply tag", "Please try again.");
+      setAlertMessage("Couldn't apply tag. Please try again.");
     } finally {
       setIsBulkWorking(false);
     }
@@ -100,37 +103,29 @@ export default function DocsScreen() {
       setSelectMode(false);
       refetch();
     } catch {
-      Alert.alert("Couldn't move documents", "Please try again.");
+      setAlertMessage("Couldn't move documents. Please try again.");
     } finally {
       setIsBulkWorking(false);
     }
   }
 
-  function confirmBulkDelete() {
-    Alert.alert(`Delete ${selected.size} document(s)?`, "They'll be moved to Trash.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setIsBulkWorking(true);
-          try {
-            await apiFetch("/documents/bulk/delete", {
-              method: "POST",
-              body: { documentIds: Array.from(selected) },
-              token,
-            });
-            setSelected(new Set());
-            setSelectMode(false);
-            refetch();
-          } catch {
-            Alert.alert("Couldn't delete documents", "Please try again.");
-          } finally {
-            setIsBulkWorking(false);
-          }
-        },
-      },
-    ]);
+  async function bulkDelete() {
+    setIsBulkWorking(true);
+    try {
+      await apiFetch("/documents/bulk/delete", {
+        method: "POST",
+        body: { documentIds: Array.from(selected) },
+        token,
+      });
+      setSelected(new Set());
+      setSelectMode(false);
+      refetch();
+    } catch {
+      setAlertMessage("Couldn't delete documents. Please try again.");
+    } finally {
+      setIsBulkWorking(false);
+      setBulkDeleteOpen(false);
+    }
   }
 
   const params = new URLSearchParams();
@@ -452,13 +447,25 @@ export default function DocsScreen() {
               >
                 <Text className="text-xs font-medium text-brand">Move</Text>
               </Pressable>
-              <Pressable disabled={isBulkWorking} onPress={confirmBulkDelete}>
+              <Pressable disabled={isBulkWorking} onPress={() => setBulkDeleteOpen(true)}>
                 <Text className="text-xs font-medium text-destructive">Delete</Text>
               </Pressable>
             </View>
           </View>
         </View>
       ) : null}
+
+      <ConfirmDialog
+        visible={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Delete ${selected.size} document(s)?`}
+        description="They'll be moved to Trash."
+        confirmLabel="Delete"
+        destructive
+        isLoading={isBulkWorking}
+        onConfirm={bulkDelete}
+      />
+      <AlertDialog visible={Boolean(alertMessage)} onOpenChange={(open) => !open && setAlertMessage(null)} title="Couldn't complete action" description={alertMessage ?? undefined} />
     </View>
   );
 }

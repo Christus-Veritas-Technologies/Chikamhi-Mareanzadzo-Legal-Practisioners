@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, Text, TextInput, View } from "react-native";
 
+import { AlertDialog } from "@/components/confirm-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
@@ -50,6 +51,7 @@ export default function DocumentViewerScreen() {
   const [signerRole, setSignerRole] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{ title: string; description?: string } | null>(null);
 
   async function submitSignature() {
     if (!doc || !signerName.trim() || !consentChecked) return;
@@ -65,9 +67,15 @@ export default function DocumentViewerScreen() {
       setSignerRole("");
       setConsentChecked(false);
       refetch();
-      Alert.alert("Signature recorded", "This document's signature has been added to its audit trail.");
+      setAlertInfo({
+        title: "Signature recorded",
+        description: "This document's signature has been added to its audit trail.",
+      });
     } catch (err) {
-      Alert.alert("Couldn't sign document", err instanceof Error ? err.message : "Please try again.");
+      setAlertInfo({
+        title: "Couldn't sign document",
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
     } finally {
       setIsSigning(false);
     }
@@ -80,16 +88,16 @@ export default function DocumentViewerScreen() {
   async function handleDownload() {
     if (!doc) return;
     if (!doc.downloadUrl) {
-      Alert.alert("No file stored yet", "This record has no uploaded bytes to download.");
+      setAlertInfo({ title: "No file stored yet", description: "This record has no uploaded bytes to download." });
       return;
     }
     setIsDownloading(true);
     try {
       await downloadDocument({ id: doc.id, name: doc.name, downloadUrl: doc.downloadUrl });
       setSavedOffline(true);
-      Alert.alert("Downloaded", "Saved for offline access. Find it under Downloads in the menu.");
+      setAlertInfo({ title: "Downloaded", description: "Saved for offline access. Find it under Downloads in the menu." });
     } catch (err) {
-      Alert.alert("Download failed", err instanceof Error ? err.message : "Please try again.");
+      setAlertInfo({ title: "Download failed", description: err instanceof Error ? err.message : "Please try again." });
     } finally {
       setIsDownloading(false);
     }
@@ -279,6 +287,13 @@ export default function DocumentViewerScreen() {
           </View>
         </View>
       </Modal>
+
+      <AlertDialog
+        visible={Boolean(alertInfo)}
+        onOpenChange={(open) => !open && setAlertInfo(null)}
+        title={alertInfo?.title ?? ""}
+        description={alertInfo?.description}
+      />
     </Container>
   );
 }

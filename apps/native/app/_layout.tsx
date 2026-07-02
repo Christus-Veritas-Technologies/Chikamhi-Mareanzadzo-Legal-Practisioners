@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppDrawer } from "@/components/app-drawer";
+import { OfflineBanner } from "@/components/offline-banner";
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { DrawerProvider } from "@/contexts/drawer-context";
@@ -58,6 +59,7 @@ function RootNavigator() {
         </Stack.Protected>
       </Stack>
       {isSignedIn ? <AppDrawer /> : null}
+      {isSignedIn ? <OfflineBanner /> : null}
     </View>
   );
 }

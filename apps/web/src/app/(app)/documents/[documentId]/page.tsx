@@ -2,7 +2,18 @@
 
 import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
-import { Download, FileText, FileX, Pencil, Trash2, X } from "lucide-react";
+import { Checkbox } from "@CMLP/ui/components/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@CMLP/ui/components/dialog";
+import { Input } from "@CMLP/ui/components/input";
+import { Label } from "@CMLP/ui/components/label";
+import { Download, FileText, FileX, PenLine, Pencil, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +24,14 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { StatusPill } from "@/components/status-pill";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
+
+type Signature = {
+  id: string;
+  signerName: string;
+  signerRole: string | null;
+  witnessedBy: string | null;
+  createdAt: string;
+};
 
 type DocumentDetail = {
   id: string;
@@ -27,6 +46,7 @@ type DocumentDetail = {
   tags: { id: string; name: string; colorClass: string }[];
   hasStoredFile: boolean;
   downloadUrl: string | null;
+  signatures: Signature[];
 };
 
 type TagOption = { id: string; name: string; colorClass: string };
@@ -58,6 +78,33 @@ export default function DocumentViewerPage() {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+
+  const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [signerName, setSignerName] = useState("");
+  const [signerRole, setSignerRole] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [isSigning, setIsSigning] = useState(false);
+
+  async function submitSignature() {
+    if (!doc || !signerName.trim() || !consentChecked) return;
+    setIsSigning(true);
+    try {
+      await apiFetch(`/documents/${doc.id}/sign`, {
+        method: "POST",
+        body: JSON.stringify({ signerName: signerName.trim(), signerRole: signerRole.trim() || undefined, consent: true }),
+      });
+      toast.success("Signature recorded.");
+      setSignDialogOpen(false);
+      setSignerName("");
+      setSignerRole("");
+      setConsentChecked(false);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't record signature.");
+    } finally {
+      setIsSigning(false);
+    }
+  }
 
   const { data: allTagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const allTags = allTagsData?.tags ?? [];
@@ -188,7 +235,7 @@ export default function DocumentViewerPage() {
                   onChange={(e) => setNameDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveRename()}
                   onBlur={saveRename}
-                  className="w-full rounded-none border border-input bg-background px-1.5 py-1 text-sm font-medium text-foreground"
+                  className="w-full rounded-lg border border-input bg-background px-1.5 py-1.5 text-sm font-medium text-foreground"
                 />
               ) : (
                 <div className="flex items-start justify-between gap-2">
@@ -209,7 +256,7 @@ export default function DocumentViewerPage() {
                 <select
                   value={doc.status}
                   onChange={(e) => updateStatus(e.target.value)}
-                  className="h-6 rounded-none border border-input bg-background px-1 text-[11px] text-foreground"
+                  className="py-1 rounded-lg border border-input bg-background px-1 text-[11px] text-foreground"
                 >
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>
@@ -236,7 +283,7 @@ export default function DocumentViewerPage() {
                 <select
                   value={doc.case?.id ?? ""}
                   onChange={(e) => moveCase(e.target.value)}
-                  className="mt-0.5 h-7 w-full rounded-none border border-input bg-background px-1.5 text-xs text-foreground"
+                  className="mt-0.5 py-1.5 w-full rounded-lg border border-input bg-background px-1.5 text-xs text-foreground"
                 >
                   <option value="">Unfiled</option>
                   {casesForClient.map((c) => (
@@ -251,7 +298,7 @@ export default function DocumentViewerPage() {
                 <select
                   value={doc.folder?.id ?? ""}
                   onChange={(e) => moveFolder(e.target.value)}
-                  className="mt-0.5 h-7 w-full rounded-none border border-input bg-background px-1.5 text-xs text-foreground"
+                  className="mt-0.5 py-1.5 w-full rounded-lg border border-input bg-background px-1.5 text-xs text-foreground"
                 >
                   <option value="">No folder</option>
                   {folders.map((f) => (
@@ -284,7 +331,7 @@ export default function DocumentViewerPage() {
                           setIsAddingTag(false);
                         }}
                         onBlur={() => setIsAddingTag(false)}
-                        className="h-6 rounded-none border border-input bg-background px-1 text-[11px] text-foreground"
+                        className="py-1 rounded-lg border border-input bg-background px-1 text-[11px] text-foreground"
                       >
                         <option value="" disabled>
                           Select tag…
@@ -325,11 +372,37 @@ export default function DocumentViewerPage() {
                   )}
                 </div>
               </div>
+
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Signatures</p>
+                {doc.signatures.length === 0 ? (
+                  <p className="mt-1 text-foreground">Not yet signed.</p>
+                ) : (
+                  <ul className="mt-1 flex flex-col gap-1.5">
+                    {doc.signatures.map((s) => (
+                      <li key={s.id} className="rounded-lg border border-border px-2 py-1.5">
+                        <p className="font-medium text-foreground">
+                          {s.signerName}
+                          {s.signerRole ? ` · ${s.signerRole}` : ""}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {s.witnessedBy ? ` · witnessed by ${s.witnessedBy}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <Button className="w-full" onClick={handleDownload}>
               <Download />
               Download
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setSignDialogOpen(true)}>
+              <PenLine />
+              Sign document
             </Button>
             <Button variant="outline" className="w-full" onClick={handleDelete} disabled={isDeleting}>
               <Trash2 />
@@ -338,6 +411,43 @@ export default function DocumentViewerPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={signDialogOpen} onOpenChange={setSignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign document</DialogTitle>
+            <DialogDescription>
+              Records a typed-name electronic signature — the full name, role, timestamp, and your
+              account as witness are permanently attached to this document's audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="signer-name">Signer's full name</Label>
+              <Input id="signer-name" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="e.g. Rutendo Mareanadzo" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="signer-role">Role (optional)</Label>
+              <Input id="signer-role" value={signerRole} onChange={(e) => setSignerRole(e.target.value)} placeholder="e.g. Client, Witness, Attorney" />
+            </div>
+            <label htmlFor="signer-consent" className="flex items-start gap-2 text-xs">
+              <Checkbox id="signer-consent" checked={consentChecked} onCheckedChange={(v) => setConsentChecked(v === true)} />
+              <span>
+                I confirm {signerName.trim() || "the signer"} has reviewed this document and intends this as their
+                legally binding electronic signature.
+              </span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitSignature} disabled={isSigning || !signerName.trim() || !consentChecked}>
+              {isSigning ? "Signing…" : "Confirm signature"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {history.length > 0 ? (
         <Card>

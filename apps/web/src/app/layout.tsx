@@ -17,6 +17,10 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "Chikamhi & Mareanadzo — Document System",
   description: "Digitized document management for Chikamhi & Mareanadzo Legal Practitioners.",
+  manifest: "/manifest.json",
+  other: {
+    "apple-mobile-web-app-title": "CMLP",
+  },
 };
 
 export default function RootLayout({

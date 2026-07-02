@@ -8,6 +8,7 @@
     },
     "name": "CMLP",
     "slug": "CMLP",
+    "icon": "./assets/images/icon.png",
     "plugins": [
       "expo-font",
       [

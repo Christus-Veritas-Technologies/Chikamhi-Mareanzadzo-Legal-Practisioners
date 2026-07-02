@@ -2,21 +2,21 @@
 
 import { Button } from "@CMLP/ui/components/button";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { apiFetch, useApi } from "@/hooks/use-api";
+import { relativeTime } from "@/lib/format-time";
 
-type TrashedDoc = { id: string; name: string; deletedBy: string; deletedAt: string };
-
-const INITIAL_TRASH: TrashedDoc[] = [
-  { id: "t1", name: "Draft Notice v1.docx", deletedBy: "P. Dube", deletedAt: "28 Jun, 10:31" },
-];
+type TrashedDoc = { id: string; name: string; deletedAt: string };
 
 export default function TrashPage() {
-  const [items, setItems] = useState<TrashedDoc[]>(INITIAL_TRASH);
+  const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[] }>("/documents/trash");
+  const items = data?.documents ?? [];
 
-  function restore(id: string) {
-    setItems((list) => list.filter((i) => i.id !== id));
+  async function restore(id: string) {
+    await apiFetch(`/documents/${id}/restore`, { method: "POST" });
+    refetch();
   }
 
   return (
@@ -29,7 +29,11 @@ export default function TrashPage() {
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
-        {items.length === 0 ? (
+        {isLoading ? (
+          <LoadingState label="Loading trash…" />
+        ) : error ? (
+          <InlineError message={error} onRetry={refetch} />
+        ) : items.length === 0 ? (
           <EmptyState icon={Trash2} title="Trash is empty" description="Deleted documents will appear here for 30 days." />
         ) : (
           <div className="overflow-x-auto">
@@ -37,7 +41,6 @@ export default function TrashPage() {
               <thead>
                 <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
                   <th className="px-4 py-2.5 font-medium">Document</th>
-                  <th className="px-4 py-2.5 font-medium">Deleted by</th>
                   <th className="px-4 py-2.5 font-medium">Deleted</th>
                   <th className="px-4 py-2.5 font-medium" />
                 </tr>
@@ -46,8 +49,9 @@ export default function TrashPage() {
                 {items.map((item) => (
                   <tr key={item.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3 font-medium text-foreground">{item.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.deletedBy}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.deletedAt}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {item.deletedAt ? relativeTime(item.deletedAt) : "—"}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <Button size="sm" variant="outline" onClick={() => restore(item.id)}>
                         Restore

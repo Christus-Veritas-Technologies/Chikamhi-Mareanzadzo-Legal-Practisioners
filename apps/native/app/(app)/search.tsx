@@ -5,9 +5,19 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
-import { DOCUMENTS, getClient } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+
+type DocumentRow = {
+  id: string;
+  name: string;
+  fileType: string;
+  status: string;
+  client: { id: string; name: string } | null;
+};
 
 const RECENT_SEARCHES = ["deed of sale 4471", "ncube affidavit"];
 const FILTER_CHIPS = ["Client", "Case", "Tag"] as const;
@@ -16,14 +26,14 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"pdf" | null>("pdf");
 
+  const path = query.trim() ? `/documents?q=${encodeURIComponent(query.trim())}` : "/documents";
+  const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>(path, [path]);
+  const documents = data?.documents ?? [];
+
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return DOCUMENTS.filter((doc) => {
-      const matchesQuery = !q || doc.name.toLowerCase().includes(q);
-      const matchesType = !typeFilter || doc.fileType === typeFilter;
-      return matchesQuery && matchesType;
-    });
-  }, [query, typeFilter]);
+    if (!typeFilter) return documents;
+    return documents.filter((doc) => doc.fileType === typeFilter);
+  }, [documents, typeFilter]);
 
   return (
     <Container className="px-5 pt-3">
@@ -83,7 +93,11 @@ export default function SearchScreen() {
         Results · {results.length}
       </Text>
 
-      {results.length === 0 ? (
+      {isLoading ? (
+        <LoadingState label="Searching…" />
+      ) : error ? (
+        <InlineError message={error} onRetry={refetch} />
+      ) : results.length === 0 ? (
         <EmptyState
           icon="search-outline"
           title="No matches"
@@ -91,24 +105,21 @@ export default function SearchScreen() {
         />
       ) : (
         <View className="gap-2 pb-6">
-          {results.map((doc) => {
-            const client = getClient(doc.clientId);
-            return (
-              <Link key={doc.id} href={`/doc/${doc.id}`} asChild>
-                <Pressable className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <View className="min-w-0 flex-1 pr-2">
-                    <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                      {doc.name}
-                    </Text>
-                    <Text numberOfLines={1} className="text-xs text-muted-foreground">
-                      {client?.name ?? "—"}
-                    </Text>
-                  </View>
-                  <StatusPill status={doc.status} />
-                </Pressable>
-              </Link>
-            );
-          })}
+          {results.map((doc) => (
+            <Link key={doc.id} href={`/doc/${doc.id}`} asChild>
+              <Pressable className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3">
+                <View className="min-w-0 flex-1 pr-2">
+                  <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                    {doc.name}
+                  </Text>
+                  <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                    {doc.client?.name ?? "—"}
+                  </Text>
+                </View>
+                <StatusPill status={formatStatus(doc.status)} />
+              </Pressable>
+            </Link>
+          ))}
         </View>
       )}
     </Container>

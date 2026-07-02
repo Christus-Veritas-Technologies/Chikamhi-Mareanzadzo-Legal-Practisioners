@@ -52,6 +52,8 @@ enum NotificationType {
   CASE_UPLOAD
   CASE_STATUS_CHANGE
   OCR_COMPLETE
+  DEADLINE_SET
+  DOCUMENT_SIGNED
 }
 
 enum DocumentOcrStatus {
@@ -88,6 +90,8 @@ model User {
   documentsDeleted  Document[]      @relation("DocumentDeletedBy")
   auditEntries      AuditLogEntry[] @relation("AuditActor")
   notifications     Notification[]  @relation("UserNotifications")
+  deadlinesCreated  Deadline[]      @relation("DeadlineCreatedBy")
+  documentsSigned   DocumentSignature[] @relation("DocumentSignedBy")
 
   @@map("users")
 }
@@ -143,8 +147,29 @@ model Case {
   documents     Document[]
   auditEntries  AuditLogEntry[]
   notifications Notification[]
+  deadlines     Deadline[]
 
   @@map("cases")
+}
+
+// A case's key dates — filing deadlines, hearing dates, statutory time limits. Read-model
+// only: "overdue" is computed client-side (dueAt < now && !completedAt), no cron/scheduler
+// exists in this app to push day-of reminders — the lead attorney gets a one-time in-app
+// notification when the deadline is first created.
+model Deadline {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  title         String
+  dueAt         DateTime
+  notes         String?
+  completedAt   DateTime?
+  createdById   String
+  createdBy     User      @relation("DeadlineCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+
+  @@index([caseId, dueAt])
+  @@map("deadlines")
 }
 
 model Folder {
@@ -196,8 +221,28 @@ model Document {
   tags          DocumentTag[]
   auditEntries  AuditLogEntry[]
   notifications Notification[]
+  signatures    DocumentSignature[]
 
   @@map("documents")
+}
+
+// A typed-name electronic signature (name + role + explicit consent attestation + timestamp
+// + IP), not a drawn/wet-ink signature — the same mechanism most e-signature tools offer
+// alongside drawn signatures, chosen here to avoid a canvas/gesture dependency on both
+// platforms. A document can carry multiple signatures (client, witness, attorney, etc.).
+model DocumentSignature {
+  id           String    @id @default(cuid())
+  documentId   String
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signerName   String
+  signerRole   String?
+  signedById   String?
+  signedBy     User?     @relation("DocumentSignedBy", fields: [signedById], references: [id])
+  ipAddress    String?
+  consentText  String
+  createdAt    DateTime  @default(now())
+
+  @@map("document_signatures")
 }
 
 model DocumentTag {

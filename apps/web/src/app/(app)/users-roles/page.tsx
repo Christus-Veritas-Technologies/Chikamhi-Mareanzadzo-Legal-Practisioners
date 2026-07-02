@@ -2,13 +2,18 @@
 
 import { cn } from "@CMLP/ui/lib/utils";
 import { Users } from "lucide-react";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { useCurrentUser } from "@/contexts/current-user-context";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
 import { relativeTime } from "@/lib/format-time";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type StaffMember = {
   id: string;
@@ -31,8 +36,17 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+const PAGE_SIZE = 25;
+
 export default function UsersRolesPage() {
-  const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[] }>("/users");
+  // Managing accounts (invite, role changes, suspend) is admin-only server-side — mirror
+  // that here so non-admins see a read-only roster instead of controls that 403.
+  const isAdmin = useCurrentUser().role === "ADMIN";
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[]; pagination: Pagination }>(
+    `/users?limit=${limit}`,
+    [limit],
+  );
   const staff = data?.users ?? [];
 
   const activeCount = staff.filter((s) => s.isActive).length;
@@ -53,10 +67,10 @@ export default function UsersRolesPage() {
         <div>
           <h1 className="font-serif text-2xl font-semibold text-foreground">Users & roles</h1>
           <p className="text-sm text-muted-foreground">
-            {staff.length} staff accounts · {activeCount} active
+            {data?.pagination.total ?? staff.length} staff accounts · {activeCount} active
           </p>
         </div>
-        <InviteUserDialog onSaved={refetch} />
+        {isAdmin ? <InviteUserDialog onSaved={refetch} /> : null}
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
@@ -92,36 +106,46 @@ export default function UsersRolesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <select
-                        value={member.role}
-                        onChange={(e) => setRole(member.id, e.target.value as StaffMember["role"])}
-                        className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
-                      >
-                        {ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {formatStatus(role)}
-                          </option>
-                        ))}
-                      </select>
+                      {isAdmin ? (
+                        <select
+                          value={member.role}
+                          onChange={(e) => setRole(member.id, e.target.value as StaffMember["role"])}
+                          className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                        >
+                          {ROLES.map((role) => (
+                            <option key={role} value={role}>
+                              {formatStatus(role)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-foreground">{formatStatus(member.role)}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleActive(member.id, member.isActive)}
-                        className="flex items-center gap-2"
-                      >
-                        <span
-                          className={cn(
-                            "flex h-4 w-7 items-center rounded-full px-0.5 transition-colors",
-                            member.isActive ? "justify-end bg-success" : "justify-start bg-muted",
-                          )}
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleActive(member.id, member.isActive)}
+                          className="flex items-center gap-2"
                         >
-                          <span className="size-3 rounded-full bg-white" />
-                        </span>
-                        <span className={member.isActive ? "text-success" : "text-muted-foreground"}>
+                          <span
+                            className={cn(
+                              "flex h-4 w-7 items-center rounded-full px-0.5 transition-colors",
+                              member.isActive ? "justify-end bg-success" : "justify-start bg-muted",
+                            )}
+                          >
+                            <span className="size-3 rounded-full bg-white" />
+                          </span>
+                          <span className={member.isActive ? "text-success" : "text-muted-foreground"}>
+                            {member.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className={member.isActive ? "text-xs text-success" : "text-xs text-muted-foreground"}>
                           {member.isActive ? "Active" : "Suspended"}
                         </span>
-                      </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {member.lastActive ? relativeTime(member.lastActive) : "Never"}
@@ -132,6 +156,14 @@ export default function UsersRolesPage() {
             </table>
           </div>
         )}
+        {data?.pagination ? (
+          <LoadMoreButton
+            shown={staff.length}
+            total={data.pagination.total}
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            loading={isLoading}
+          />
+        ) : null}
       </div>
     </div>
   );

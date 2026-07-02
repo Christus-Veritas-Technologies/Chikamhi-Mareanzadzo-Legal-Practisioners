@@ -4,13 +4,16 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/component
 import { FileX, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { StatusPill } from "@/components/status-pill";
 import { useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type DocumentRow = {
   id: string;
@@ -27,6 +30,7 @@ type CaseOption = { id: string; title: string; client: { id: string } };
 type TagOption = { id: string; name: string };
 
 const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
+const PAGE_SIZE = 25;
 
 export default function DocumentsPage() {
   return (
@@ -43,6 +47,13 @@ function DocumentsPageInner() {
   const [caseFilter, setCaseFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
+
+  // Reset back to the first page whenever the filters change, so "Load more" always
+  // starts fresh instead of carrying over a stale page size from a previous filter set.
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [query, clientFilter, caseFilter, tagFilter, statusFilter]);
 
   const params = new URLSearchParams();
   if (query.trim()) params.set("q", query.trim());
@@ -50,10 +61,13 @@ function DocumentsPageInner() {
   if (caseFilter) params.set("caseId", caseFilter);
   if (tagFilter) params.set("tagId", tagFilter);
   if (statusFilter) params.set("status", statusFilter);
+  params.set("limit", String(limit));
   const search = params.toString();
   const path = search ? `/documents?${search}` : "/documents";
 
-  const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>(path, [path]);
+  const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[]; pagination: Pagination }>(path, [
+    path,
+  ]);
   const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
   const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
   const { data: tagsData } = useApi<{ tags: TagOption[] }>("/tags");
@@ -67,7 +81,7 @@ function DocumentsPageInner() {
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Documents</h1>
         <p className="text-sm text-muted-foreground">
-          {documents.length} documents across all clients and cases
+          {data?.pagination.total ?? documents.length} documents across all clients and cases
         </p>
       </div>
 
@@ -180,6 +194,14 @@ function DocumentsPageInner() {
             </table>
           </div>
         )}
+        {data?.pagination ? (
+          <LoadMoreButton
+            shown={documents.length}
+            total={data.pagination.total}
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            loading={isLoading}
+          />
+        ) : null}
       </div>
     </div>
   );

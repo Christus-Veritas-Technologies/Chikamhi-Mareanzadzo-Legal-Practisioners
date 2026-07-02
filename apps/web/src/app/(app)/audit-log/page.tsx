@@ -2,11 +2,14 @@
 
 import { Button } from "@CMLP/ui/components/button";
 import { Download, History } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { useApi } from "@/hooks/use-api";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type AuditEntry = {
   id: string;
@@ -52,21 +55,32 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+const PAGE_SIZE = 50;
+
 export default function AuditLogPage() {
   const [actorFilter, setActorFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [actorFilter, actionFilter]);
 
   const params = new URLSearchParams();
   if (actorFilter) params.set("actorId", actorFilter);
   if (actionFilter) params.set("action", actionFilter);
+  params.set("limit", String(limit));
   const query = params.toString();
-  const path = query ? `/audit-log?${query}` : "/audit-log";
+  const path = `/audit-log?${query}`;
 
-  const { data, isLoading, error, refetch } = useApi<{ entries: AuditEntry[] }>(path, [path]);
+  const { data, isLoading, error, refetch } = useApi<{ entries: AuditEntry[]; pagination: Pagination }>(path, [
+    path,
+  ]);
   const entries = data?.entries ?? [];
 
   // Unfiltered baseline so the filter dropdowns don't shrink as filters are applied.
-  const { data: allData } = useApi<{ entries: AuditEntry[] }>("/audit-log");
+  // Uses a large limit since this call only feeds dropdown options, not the visible table.
+  const { data: allData } = useApi<{ entries: AuditEntry[] }>("/audit-log?limit=500");
   const allEntries = allData?.entries ?? [];
 
   const actors = useMemo(() => {
@@ -188,6 +202,14 @@ export default function AuditLogPage() {
             </table>
           </div>
         )}
+        {data?.pagination ? (
+          <LoadMoreButton
+            shown={entries.length}
+            total={data.pagination.total}
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            loading={isLoading}
+          />
+        ) : null}
       </div>
     </div>
   );

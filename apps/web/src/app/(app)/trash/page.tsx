@@ -6,8 +6,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
+import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { useCurrentUser } from "@/contexts/current-user-context";
 import { apiFetch, useApi } from "@/hooks/use-api";
+
+type Pagination = { total: number; limit: number; offset: number; hasMore: boolean };
 
 type TrashedDoc = {
   id: string;
@@ -19,8 +23,15 @@ type TrashedDoc = {
   purgesInDays: number;
 };
 
+const PAGE_SIZE = 25;
+
 export default function TrashPage() {
-  const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[] }>("/documents/trash");
+  const isAdmin = useCurrentUser().role === "ADMIN";
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[]; pagination: Pagination }>(
+    `/documents/trash?limit=${limit}`,
+    [limit],
+  );
   const items = data?.documents ?? [];
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -102,14 +113,16 @@ export default function TrashPage() {
                         >
                           Restore
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => permanentlyDelete(item.id, item.name)}
-                          disabled={pendingId === item.id}
-                        >
-                          Delete
-                        </Button>
+                        {isAdmin ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => permanentlyDelete(item.id, item.name)}
+                            disabled={pendingId === item.id}
+                          >
+                            Delete
+                          </Button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -118,6 +131,14 @@ export default function TrashPage() {
             </table>
           </div>
         )}
+        {data?.pagination ? (
+          <LoadMoreButton
+            shown={items.length}
+            total={data.pagination.total}
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            loading={isLoading}
+          />
+        ) : null}
       </div>
     </div>
   );

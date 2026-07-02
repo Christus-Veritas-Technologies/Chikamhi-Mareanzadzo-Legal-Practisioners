@@ -5,12 +5,17 @@ import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { useCurrentUser } from "@/contexts/current-user-context";
 import { apiFetch, useApi } from "@/hooks/use-api";
 
 type Folder = { id: string; name: string; documentCount: number };
 type Tag = { id: string; name: string; colorClass: string; documentCount: number };
 
 export default function FoldersTagsPage() {
+  // Creating/renaming folders and tags is admin-only server-side — mirror that here so
+  // non-admins aren't shown controls that will just 403.
+  const isAdmin = useCurrentUser().role === "ADMIN";
+
   const { data: foldersData, isLoading: foldersLoading, error: foldersError, refetch: refetchFolders } =
     useApi<{ folders: Folder[] }>("/folders");
   const { data: tagsData, isLoading: tagsLoading, error: tagsError, refetch: refetchTags } =
@@ -96,13 +101,15 @@ export default function FoldersTagsPage() {
             title="No folders yet"
             description="Create your first folder to start organizing documents."
             action={
-              <button
-                type="button"
-                onClick={() => setAddingFolder(true)}
-                className="text-xs font-medium text-brand hover:underline"
-              >
-                New folder
-              </button>
+              isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setAddingFolder(true)}
+                  className="text-xs font-medium text-brand hover:underline"
+                >
+                  New folder
+                </button>
+              ) : undefined
             }
           />
         ) : (
@@ -115,7 +122,7 @@ export default function FoldersTagsPage() {
               </div>
             ))}
 
-            {addingFolder ? (
+            {!isAdmin ? null : addingFolder ? (
               <div className="flex flex-col gap-2 rounded-none border border-dashed border-border p-4">
                 <input
                   autoFocus
@@ -151,14 +158,16 @@ export default function FoldersTagsPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">Tags</h2>
-          <button
-            type="button"
-            onClick={addTag}
-            disabled={isSavingTag}
-            className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
-          >
-            {isSavingTag ? "Adding…" : "+ New tag"}
-          </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={addTag}
+              disabled={isSavingTag}
+              className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              {isSavingTag ? "Adding…" : "+ New tag"}
+            </button>
+          ) : null}
         </div>
 
         {tagsLoading ? (
@@ -195,9 +204,11 @@ export default function FoldersTagsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">{tag.documentCount} docs</span>
-                  <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`}>
-                    <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
-                  </button>
+                  {isAdmin ? (
+                    <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`}>
+                      <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}

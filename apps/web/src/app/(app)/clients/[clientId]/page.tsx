@@ -51,6 +51,14 @@ type ClientDetail = {
 
 type Contact = { id: string; name: string; role: string | null; email: string | null; phone: string | null };
 type AuditEntry = { id: string; actor: string; isSystem: boolean; action: string; target: string; timestamp: string };
+type ClientDocument = {
+  id: string;
+  name: string;
+  status: string;
+  uploadedBy: string;
+  modified: string;
+  case: { id: string; title: string } | null;
+};
 
 const ACTION_LABELS: Record<string, string> = {
   VIEWED: "Viewed",
@@ -83,6 +91,11 @@ export default function ClientDetailPage() {
   const { data: activityData, isLoading: activityLoading, error: activityError, refetch: refetchActivity } =
     useApi<{ entries: AuditEntry[] }>(tab === "activity" ? `/audit-log?clientId=${clientId}` : null);
   const activity = activityData?.entries ?? [];
+
+  const { data: docsData, isLoading: docsLoading, error: docsError, refetch: refetchDocs } = useApi<{
+    documents: ClientDocument[];
+  }>(tab === "documents" ? `/documents?clientId=${clientId}` : null);
+  const clientDocuments = docsData?.documents ?? [];
 
   if (isLoading) {
     return <LoadingState label="Loading client…" />;
@@ -216,16 +229,63 @@ export default function ClientDetailPage() {
       ) : null}
 
       {tab === "documents" ? (
-        <EmptyState
-          icon={FileText}
-          title="Documents view coming soon"
-          description="Browse this client's documents directly from the global Documents library for now."
-          action={
-            <Link href="/documents" className={buttonVariants({ size: "sm", variant: "outline" })}>
-              Go to Documents
-            </Link>
-          }
-        />
+        docsLoading ? (
+          <LoadingState label="Loading documents…" />
+        ) : docsError ? (
+          <InlineError message={docsError} onRetry={refetchDocs} />
+        ) : clientDocuments.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No documents yet"
+            description="Documents uploaded for this client will show up here."
+            action={
+              <Link href="/upload" className={buttonVariants({ size: "sm", variant: "outline" })}>
+                Upload a document
+              </Link>
+            }
+          />
+        ) : (
+          <div className="overflow-hidden rounded-none border border-border bg-card">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
+                    <th className="px-4 py-2.5 font-medium">Document</th>
+                    <th className="px-4 py-2.5 font-medium">Case</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
+                    <th className="px-4 py-2.5 font-medium">Uploaded by</th>
+                    <th className="px-4 py-2.5 font-medium">Modified</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientDocuments.map((doc) => (
+                    <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
+                          {doc.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-brand">
+                        {doc.case ? (
+                          <Link href={`/cases/${doc.case.id}`} className="hover:underline">
+                            {doc.case.title}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill status={formatStatus(doc.status)} />
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{doc.modified}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       ) : null}
 
       {tab === "contacts" ? (

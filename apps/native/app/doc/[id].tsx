@@ -4,13 +4,44 @@ import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { StatusPill } from "@/components/status-pill";
-import { getCase, getClient, getDocument } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+
+type DocumentDetail = {
+  id: string;
+  name: string;
+  status: string;
+  uploadedBy: string;
+  modified: string;
+  client: { id: string; name: string } | null;
+  case: { id: string; title: string } | null;
+};
 
 export default function DocumentViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const doc = getDocument(id);
+  const { data, isLoading, error, refetch } = useApi<{ document: DocumentDetail }>(`/documents/${id}`);
+  const doc = data?.document;
+
+  if (isLoading) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Document" }} />
+        <LoadingState label="Loading document…" />
+      </Container>
+    );
+  }
+
+  if (error && !error.toLowerCase().includes("not found")) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Document" }} />
+        <InlineError message={error} onRetry={refetch} />
+      </Container>
+    );
+  }
 
   if (!doc) {
     return (
@@ -20,9 +51,6 @@ export default function DocumentViewerScreen() {
       </Container>
     );
   }
-
-  const client = getClient(doc.clientId);
-  const matter = doc.caseId ? getCase(doc.caseId) : undefined;
 
   return (
     <Container className="px-5 pt-3">
@@ -38,16 +66,16 @@ export default function DocumentViewerScreen() {
       <View className="mt-4">
         <Text className="text-sm font-medium text-foreground">{doc.name}</Text>
         <View className="mt-1.5">
-          <StatusPill status={doc.status} />
+          <StatusPill status={formatStatus(doc.status)} />
         </View>
       </View>
 
       <View className="mt-4 gap-3">
         <View>
           <Text className="text-[10px] tracking-wide text-muted-foreground uppercase">Client</Text>
-          {client ? (
-            <Link href={`/client/${client.id}`}>
-              <Text className="text-sm text-brand">{client.name}</Text>
+          {doc.client ? (
+            <Link href={`/client/${doc.client.id}`}>
+              <Text className="text-sm text-brand">{doc.client.name}</Text>
             </Link>
           ) : (
             <Text className="text-sm text-foreground">—</Text>
@@ -55,9 +83,9 @@ export default function DocumentViewerScreen() {
         </View>
         <View>
           <Text className="text-[10px] tracking-wide text-muted-foreground uppercase">Case</Text>
-          {matter ? (
-            <Link href={`/case/${matter.id}`}>
-              <Text className="text-sm text-brand">{matter.title}</Text>
+          {doc.case ? (
+            <Link href={`/case/${doc.case.id}`}>
+              <Text className="text-sm text-brand">{doc.case.title}</Text>
             </Link>
           ) : (
             <Text className="text-sm text-foreground">—</Text>

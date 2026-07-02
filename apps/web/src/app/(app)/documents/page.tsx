@@ -6,28 +6,45 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { StatusPill } from "@/components/status-pill";
-import { CLIENTS, DOCUMENTS, getClient } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+
+type DocumentRow = {
+  id: string;
+  name: string;
+  status: string;
+  uploadedBy: string;
+  modified: string;
+  client: { id: string; name: string } | null;
+  case: { id: string; title: string } | null;
+};
+
+type ClientOption = { id: string; name: string };
 
 export default function DocumentsPage() {
   const [query, setQuery] = useState("");
   const [clientFilter, setClientFilter] = useState("");
 
+  const path = clientFilter ? `/documents?clientId=${clientFilter}` : "/documents";
+  const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>(path, [path]);
+  const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
+  const documents = data?.documents ?? [];
+  const clients = clientsData?.clients ?? [];
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return DOCUMENTS.filter((doc) => {
-      const matchesQuery = !q || doc.name.toLowerCase().includes(q);
-      const matchesClient = !clientFilter || doc.clientId === clientFilter;
-      return matchesQuery && matchesClient;
-    });
-  }, [query, clientFilter]);
+    if (!q) return documents;
+    return documents.filter((doc) => doc.name.toLowerCase().includes(q));
+  }, [documents, query]);
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Documents</h1>
         <p className="text-sm text-muted-foreground">
-          {DOCUMENTS.length} documents across all clients and cases
+          {documents.length} documents across all clients and cases
         </p>
       </div>
 
@@ -50,7 +67,7 @@ export default function DocumentsPage() {
           className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All clients</option>
-          {CLIENTS.map((c) => (
+          {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -59,7 +76,11 @@ export default function DocumentsPage() {
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <LoadingState label="Loading documents…" />
+        ) : error ? (
+          <InlineError message={error} onRetry={refetch} />
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={FileX}
             title="No documents found"
@@ -78,24 +99,21 @@ export default function DocumentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((doc) => {
-                  const client = getClient(doc.clientId);
-                  return (
-                    <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                      <td className="px-4 py-3">
-                        <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
-                          {doc.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-brand">{client?.name ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <StatusPill status={doc.status} />
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{doc.modified}</td>
-                    </tr>
-                  );
-                })}
+                {filtered.map((doc) => (
+                  <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                    <td className="px-4 py-3">
+                      <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
+                        {doc.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-brand">{doc.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <StatusPill status={formatStatus(doc.status)} />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{doc.modified}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

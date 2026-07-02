@@ -1,36 +1,47 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@CMLP/ui/components/card";
-import { FileText, FolderOpen, HardDrive, Timer } from "lucide-react";
+import { FileText, FileX2, FolderOpen, HardDrive, Timer } from "lucide-react";
 
+import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { StatusPill } from "@/components/status-pill";
 import { useCurrentUser } from "@/contexts/current-user-context";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
 
-// Mock data — swap for real queries once the Client/Matter/Document Prisma models exist.
-const STATS = [
-  { label: "Filed this week", value: "128", delta: "+18%", icon: FileText },
-  { label: "Pending OCR", value: "7", delta: null, icon: Timer },
-  { label: "Open cases", value: "43", delta: "+3", icon: FolderOpen },
-  { label: "R2 storage used", value: "64.2 GB", delta: "of 200 GB", icon: HardDrive },
-] as const;
-
-const RECENT_DOCUMENTS = [
-  { name: "Deed of Sale — Stand 4471.pdf", matter: "Moyo Holdings", status: "Executed", modified: "2h ago" },
-  { name: "Affidavit of Service.pdf", matter: "Estate of T. Ncube", status: "Filed", modified: "Today" },
-  { name: "Heads of Argument — Appeal.docx", matter: "Sibanda v. Moyo", status: "Under review", modified: "Yesterday" },
-  { name: "Shareholders Agreement (draft 3).docx", matter: "Chikamhi Ventures", status: "Draft", modified: "2d ago" },
-  { name: "Notice of Set Down.pdf", matter: "Dube Divorce", status: "Signed", modified: "3d ago" },
-] as const;
-
-const STATUS_STYLES: Record<string, string> = {
-  Executed: "bg-brand-muted text-brand-foreground",
-  Filed: "bg-success/15 text-success",
-  Signed: "bg-success/15 text-success",
-  "Under review": "bg-warning/15 text-warning",
-  Draft: "bg-muted text-muted-foreground",
+type DashboardSummary = {
+  stats: {
+    filedThisWeek: number;
+    underReview: number;
+    openCases: number;
+    storageUsed: string;
+    storageQuotaGb: number;
+    storagePercentUsed: number;
+  };
+  recentDocuments: { id: string; name: string; status: string; modified: string; matter: string }[];
 };
 
 export default function DashboardPage() {
   const user = useCurrentUser();
+  const { data, isLoading, error, refetch } = useApi<DashboardSummary>("/dashboard/summary");
+
+  const stats = data?.stats;
+  const recentDocuments = data?.recentDocuments ?? [];
+
+  const statCards = stats
+    ? [
+        { label: "Filed this week", value: String(stats.filedThisWeek), icon: FileText },
+        { label: "Under review", value: String(stats.underReview), icon: Timer },
+        { label: "Open cases", value: String(stats.openCases), icon: FolderOpen },
+        {
+          label: "R2 storage used",
+          value: stats.storageUsed,
+          delta: `of ${stats.storageQuotaGb} GB`,
+          icon: HardDrive,
+        },
+      ]
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,56 +50,68 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Welcome back, {user.name.split(" ")[0]}.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {STATS.map(({ label, value, delta, icon: Icon }) => (
-          <Card key={label}>
-            <CardContent className="flex items-start justify-between">
-              <div>
-                <p className="text-xl font-semibold text-foreground">{value}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                {delta ? <p className="mt-1 text-[11px] text-success">{delta}</p> : null}
-              </div>
-              <Icon className="size-4 text-muted-foreground" />
+      {isLoading ? (
+        <LoadingState label="Loading dashboard…" />
+      ) : error ? (
+        <InlineError message={error} onRetry={refetch} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {statCards.map(({ label, value, delta, icon: Icon }) => (
+              <Card key={label}>
+                <CardContent className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xl font-semibold text-foreground">{value}</p>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    {delta ? <p className="mt-1 text-[11px] text-muted-foreground">{delta}</p> : null}
+                  </div>
+                  <Icon className="size-4 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-serif text-base font-semibold">Recent documents</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recentDocuments.length === 0 ? (
+                <EmptyState
+                  icon={FileX2}
+                  title="No documents yet"
+                  description="Documents uploaded across the firm will show up here."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
+                        <th className="px-4 py-2 font-medium">Document</th>
+                        <th className="px-4 py-2 font-medium">Case · Client</th>
+                        <th className="px-4 py-2 font-medium">Status</th>
+                        <th className="px-4 py-2 font-medium">Modified</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentDocuments.map((doc) => (
+                        <tr key={doc.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-2.5 font-medium text-foreground">{doc.name}</td>
+                          <td className="px-4 py-2.5 text-brand">{doc.matter}</td>
+                          <td className="px-4 py-2.5">
+                            <StatusPill status={formatStatus(doc.status)} />
+                          </td>
+                          <td className="px-4 py-2.5 text-muted-foreground">{doc.modified}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-serif text-base font-semibold">Recent documents</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
-                  <th className="px-4 py-2 font-medium">Document</th>
-                  <th className="px-4 py-2 font-medium">Case · Client</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Modified</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RECENT_DOCUMENTS.map((doc) => (
-                  <tr key={doc.name} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2.5 font-medium text-foreground">{doc.name}</td>
-                    <td className="px-4 py-2.5 text-brand">{doc.matter}</td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[doc.status] ?? "bg-muted text-muted-foreground"}`}
-                      >
-                        {doc.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{doc.modified}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 }

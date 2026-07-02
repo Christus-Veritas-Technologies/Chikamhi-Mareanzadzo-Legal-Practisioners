@@ -1,12 +1,13 @@
 "use client";
 
-import { buttonVariants } from "@CMLP/ui/components/button";
+import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
 import { FileX2, FolderX, History, Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { CaseEditDialog } from "@/components/case-edit-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
@@ -30,6 +31,7 @@ type CaseDetail = {
   matterType: string;
   location: string | null;
   registry: string | null;
+  leadAttorneyId: string | null;
   leadAttorney: string;
   opened: string;
   client: { id: string; name: string };
@@ -107,10 +109,24 @@ export default function CaseDetailPage() {
           </div>
           <h1 className="mt-1 font-serif text-xl font-semibold text-foreground">{matter.title}</h1>
         </div>
-        <Link href="/upload" className={buttonVariants()}>
-          <Plus />
-          Upload to case
-        </Link>
+        <div className="flex items-center gap-2">
+          <CaseEditDialog
+            caseId={matter.id}
+            initial={{
+              status: matter.status,
+              matterType: matter.matterType,
+              location: matter.location,
+              registry: matter.registry,
+              leadAttorneyId: matter.leadAttorneyId,
+            }}
+            onSaved={refetch}
+            trigger={<Button variant="outline">Edit case</Button>}
+          />
+          <Link href="/upload" className={buttonVariants()}>
+            <Plus />
+            Upload to case
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 border-y border-border py-4 sm:grid-cols-3 lg:grid-cols-5">

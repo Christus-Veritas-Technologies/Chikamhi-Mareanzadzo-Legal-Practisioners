@@ -52,3 +52,19 @@ export async function requireAuth(c: Context, next: Next) {
     return unauthorized(c, "Session expired or invalid — please sign in again.");
   }
 }
+
+// Role gate — chain after requireAuth on any route that should be restricted to specific
+// roles (e.g. .use("*", requireAuth, requireRole("ADMIN"))). Client-side nav hiding is
+// cosmetic only; this is what actually stops a non-admin from calling the endpoint directly.
+export function requireRole(...roles: string[]) {
+  return async function (c: Context, next: Next) {
+    const user = c.get("user");
+    if (!user || !roles.includes(user.role)) {
+      return c.json(
+        { error: { code: "FORBIDDEN", message: "You don't have permission to do this." } },
+        403,
+      );
+    }
+    await next();
+  };
+}

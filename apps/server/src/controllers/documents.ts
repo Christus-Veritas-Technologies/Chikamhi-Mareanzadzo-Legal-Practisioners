@@ -89,6 +89,10 @@ export async function getDocument(c: Context) {
       folder: { select: { id: true, name: true } },
       uploadedBy: { select: { name: true } },
       tags: { include: { tag: true } },
+      signatures: {
+        orderBy: { createdAt: "asc" },
+        include: { signedBy: { select: { name: true } } },
+      },
     },
   });
 
@@ -124,6 +128,13 @@ export async function getDocument(c: Context) {
       downloadUrl,
       ocrStatus: doc.ocrStatus,
       ocrText: doc.ocrText,
+      signatures: doc.signatures.map((s) => ({
+        id: s.id,
+        signerName: s.signerName,
+        signerRole: s.signerRole,
+        witnessedBy: s.signedBy?.name ?? null,
+        createdAt: s.createdAt.toISOString(),
+      })),
     },
   });
 }
@@ -256,6 +267,80 @@ export async function confirmDocumentUpload(c: Context) {
   return c.json({ document: updated });
 }
 
+const signDocumentSchema = z.object({
+  signerName: z.string().min(1),
+  signerRole: z.string().optional(),
+  consent: z.literal(true, { message: "Consent to sign is required." }),
+});
+
+// Typed-name electronic signature: the authenticated staff user (signedById) captures a
+// signature on behalf of whoever is physically signing (signerName/signerRole, who may not
+// have — and doesn't need — an account of their own). A document can be signed more than
+// once (client, witness, attorney, ...); the status only flips to SIGNED on the first
+// signature so it doesn't downgrade an already-EXECUTED document.
+export async function signDocument(c: Context) {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  const parsed = signDocumentSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Invalid request." } },
+      400,
+    );
+  }
+
+  const doc = await prisma.document.findFirst({ where: { id, deletedAt: null } });
+  if (!doc) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Document not found." } }, 404);
+  }
+
+  const user = c.get("user");
+  const ipAddress =
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? undefined;
+
+  const signature = await prisma.documentSignature.create({
+    data: {
+      documentId: id,
+      signerName: parsed.data.signerName,
+      signerRole: parsed.data.signerRole,
+      signedById: user.id,
+      ipAddress,
+      consentText: `${parsed.data.signerName} electronically signed this document, witnessed by ${user.name}.`,
+    },
+  });
+
+  if (doc.status === "DRAFT" || doc.status === "UNDER_REVIEW" || doc.status === "FILED") {
+    await prisma.document.update({ where: { id }, data: { status: "SIGNED" } });
+  }
+
+  await prisma.auditLogEntry.create({
+    data: {
+      actorId: user.id,
+      action: "SIGNED",
+      targetLabel: doc.name,
+      documentId: doc.id,
+      caseId: doc.caseId,
+      sourceIp: ipAddress,
+    },
+  });
+
+  if (doc.uploadedById !== user.id) {
+    await prisma.notification.create({
+      data: {
+        userId: doc.uploadedById,
+        type: "DOCUMENT_SIGNED",
+        title: "Document signed",
+        body: `"${doc.name}" was signed by ${parsed.data.signerName}.`,
+        documentId: doc.id,
+        caseId: doc.caseId,
+      },
+    });
+  }
+
+  return c.json({ signature: { ...signature, witnessedBy: user.name } }, 201);
+}
+
 const updateDocumentSchema = z.object({
   name: z.string().min(1).optional(),
   status: z.enum(["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"]).optional(),
@@ -321,6 +406,99 @@ export async function permanentlyDeleteDocument(c: Context) {
   await prisma.document.delete({ where: { id } });
 
   return c.json({ ok: true });
+}
+
+const bulkIdsSchema = z.object({ documentIds: z.array(z.string().min(1)).min(1).max(200) });
+
+// Bulk actions reuse the same per-document audit/notification-free logic as their single-item
+// counterparts, just looped — the firm's document volumes don't warrant a batch-job queue.
+export async function bulkTagDocuments(c: Context) {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkIdsSchema.extend({ tagId: z.string().min(1) }).safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Invalid request." } },
+      400,
+    );
+  }
+
+  const { documentIds, tagId } = parsed.data;
+  await Promise.all(
+    documentIds.map((documentId) =>
+      prisma.documentTag.upsert({
+        where: { documentId_tagId: { documentId, tagId } },
+        update: {},
+        create: { documentId, tagId },
+      }),
+    ),
+  );
+
+  return c.json({ ok: true, count: documentIds.length });
+}
+
+const bulkMoveSchema = bulkIdsSchema.extend({
+  caseId: z.string().nullable().optional(),
+  folderId: z.string().nullable().optional(),
+});
+
+export async function bulkMoveDocuments(c: Context) {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkMoveSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Invalid request." } },
+      400,
+    );
+  }
+
+  const { documentIds, ...data } = parsed.data;
+  const user = c.get("user");
+
+  const docs = await Promise.all(
+    documentIds.map((id) => prisma.document.update({ where: { id }, data })),
+  );
+
+  await prisma.auditLogEntry.createMany({
+    data: docs.map((doc) => ({
+      actorId: user.id,
+      action: "MOVED" as const,
+      targetLabel: doc.name,
+      documentId: doc.id,
+      caseId: doc.caseId,
+    })),
+  });
+
+  return c.json({ ok: true, count: docs.length });
+}
+
+export async function bulkDeleteDocuments(c: Context) {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkIdsSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Invalid request." } },
+      400,
+    );
+  }
+
+  const user = c.get("user");
+  const docs = await Promise.all(
+    parsed.data.documentIds.map((id) =>
+      prisma.document.update({ where: { id }, data: { deletedAt: new Date(), deletedById: user.id } }),
+    ),
+  );
+
+  await prisma.auditLogEntry.createMany({
+    data: docs.map((doc) => ({
+      actorId: user.id,
+      action: "DELETED" as const,
+      targetLabel: doc.name,
+      documentId: doc.id,
+      caseId: doc.caseId,
+    })),
+  });
+
+  return c.json({ ok: true, count: docs.length });
 }
 
 export async function listTrash(c: Context) {

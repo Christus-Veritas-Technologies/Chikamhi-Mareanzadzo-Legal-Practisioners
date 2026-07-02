@@ -1,0 +1,126 @@
+# .easignore — controls what EAS Build uploads for the native app (and the
+# rest of this monorepo, since EAS tars from the git repo root).
+#
+# IMPORTANT: once this file exists, EAS CLI stops reading every .gitignore
+# in the repo (root + apps/web/.gitignore + apps/server/.gitignore +
+# apps/native/.gitignore + packages/db/.gitignore) and uses ONLY this file
+# instead. So this is a superset/merge of those .gitignore files, not an
+# addition to them — removing a line here un-ignores it for EAS even though
+# git still ignores it. Must live at the git repo root (not inside
+# apps/native) to take effect. Ref: https://expo.fyi/eas-build-archive
+
+# ============ Dependencies (the big one — node_modules is excluded by ============
+# ============ EAS by default regardless, but listed for clarity/safety) ============
+node_modules
+.pnp
+.pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-store/
+
+# ============ Build outputs / caches (per-app, all apps in the workspace) ============
+dist/
+build/
+out/
+.next/
+.expo/
+.turbo
+.nx
+.cache
+.metro-health-check*
+web-build/
+expo-env.d.ts
+uniwind-types.d.ts
+next-env.d.ts
+*.tsbuildinfo
+.vinxi
+.output
+.react-router/
+.tanstack/
+.nitro/
+dev-dist
+.open-next
+apps/web/src/routeTree.gen.ts
+packages/db/prisma/generated/
+
+# ============ Native build folders (Expo CNG regenerates these on the ============
+# ============ build server — don't upload locally-prebuilt copies) ============
+ios
+android
+
+# ============ Local build artifacts from past attempts ============
+*.apk
+*.aab
+*.ipa
+*.app
+
+# ============ Secrets / signing material — never upload these ============
+.env
+.env*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.keystore
+*.mobileprovision
+*.pem
+.dev.vars*
+
+# ============ Deployment-target caches (not needed for an Android/iOS build) ============
+.vercel
+.netlify
+.wrangler
+.alchemy
+
+# ============ Testing ============
+coverage
+.nyc_output
+*.lcov
+
+# ============ Logs ============
+logs
+*.log
+*.log*
+npm-debug.log*
+npm-debug.*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ============ IDE / editor ============
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea
+.vs/
+*.user
+*.swp
+*.swo
+*~
+*.orig.*
+
+# ============ OS junk ============
+.DS_Store
+Thumbs.db
+
+# ============ Misc ============
+*.tgz
+tmp
+temp
+
+# ============ Only apps/native and its shared workspace packages are ============
+# ============ actually needed for a native build — the web app and server ============
+# ============ have no runtime relevance to an Android/iOS build. Their source ============
+# ============ is small, so this isn't the big win, but it trims the archive. ============
+apps/web/.next/
+apps/web/out/
+apps/server/dist/

@@ -3,12 +3,24 @@
 import { Button } from "@CMLP/ui/components/button";
 import { cn } from "@CMLP/ui/lib/utils";
 import { UserPlus, Users } from "lucide-react";
-import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-import { STAFF, type StaffMember, type StaffRole } from "@/lib/staff-data";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { apiFetch, useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+import { relativeTime } from "@/lib/format-time";
 
-const ROLES: StaffRole[] = ["Admin", "Attorney", "Paralegal"];
+type StaffMember = {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  role: "ADMIN" | "ATTORNEY" | "PARALEGAL";
+  isActive: boolean;
+  lastActive: string | null;
+};
+
+const ROLES: StaffMember["role"][] = ["ADMIN", "ATTORNEY", "PARALEGAL"];
 
 function initials(name: string) {
   return name
@@ -20,16 +32,19 @@ function initials(name: string) {
 }
 
 export default function UsersRolesPage() {
-  const [staff, setStaff] = useState<StaffMember[]>(STAFF);
+  const { data, isLoading, error, refetch } = useApi<{ users: StaffMember[] }>("/users");
+  const staff = data?.users ?? [];
 
-  const activeCount = staff.filter((s) => s.active).length;
+  const activeCount = staff.filter((s) => s.isActive).length;
 
-  function setRole(id: string, role: StaffRole) {
-    setStaff((list) => list.map((s) => (s.id === id ? { ...s, role } : s)));
+  async function setRole(id: string, role: StaffMember["role"]) {
+    await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
+    refetch();
   }
 
-  function toggleActive(id: string) {
-    setStaff((list) => list.map((s) => (s.id === id ? { ...s, active: !s.active } : s)));
+  async function toggleActive(id: string, current: boolean) {
+    await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: !current }) });
+    refetch();
   }
 
   return (
@@ -48,7 +63,11 @@ export default function UsersRolesPage() {
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
-        {staff.length === 0 ? (
+        {isLoading ? (
+          <LoadingState label="Loading users…" />
+        ) : error ? (
+          <InlineError message={error} onRetry={refetch} />
+        ) : staff.length === 0 ? (
           <EmptyState icon={Users} title="No staff accounts" description="Invite your first colleague to get started." />
         ) : (
           <div className="overflow-x-auto">
@@ -78,12 +97,12 @@ export default function UsersRolesPage() {
                     <td className="px-4 py-3">
                       <select
                         value={member.role}
-                        onChange={(e) => setRole(member.id, e.target.value as StaffRole)}
+                        onChange={(e) => setRole(member.id, e.target.value as StaffMember["role"])}
                         className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
                       >
                         {ROLES.map((role) => (
                           <option key={role} value={role}>
-                            {role}
+                            {formatStatus(role)}
                           </option>
                         ))}
                       </select>
@@ -91,23 +110,25 @@ export default function UsersRolesPage() {
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => toggleActive(member.id)}
+                        onClick={() => toggleActive(member.id, member.isActive)}
                         className="flex items-center gap-2"
                       >
                         <span
                           className={cn(
                             "flex h-4 w-7 items-center rounded-full px-0.5 transition-colors",
-                            member.active ? "justify-end bg-success" : "justify-start bg-muted",
+                            member.isActive ? "justify-end bg-success" : "justify-start bg-muted",
                           )}
                         >
                           <span className="size-3 rounded-full bg-white" />
                         </span>
-                        <span className={member.active ? "text-success" : "text-muted-foreground"}>
-                          {member.active ? "Active" : "Suspended"}
+                        <span className={member.isActive ? "text-success" : "text-muted-foreground"}>
+                          {member.isActive ? "Active" : "Suspended"}
                         </span>
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{member.lastActive}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {member.lastActive ? relativeTime(member.lastActive) : "Never"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

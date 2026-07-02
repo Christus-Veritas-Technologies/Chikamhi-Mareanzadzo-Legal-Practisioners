@@ -3,6 +3,13 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { EmptyState } from "@/components/empty-state";
+import {
+  type CaseOption,
+  type ClientOption,
+  DestinationPickerSheet,
+  EMPTY_DESTINATION,
+  type FolderOption,
+} from "@/components/destination-picker-sheet";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { useAuth } from "@/contexts/auth-context";
@@ -11,14 +18,11 @@ import { assembleScanPdf } from "@/lib/pdf-assembly";
 import { clearPages, getPages } from "@/lib/scan-session";
 import { enqueueUpload, processQueue } from "@/lib/upload-queue";
 
-type ClientOption = { id: string; name: string };
-type CaseOption = { id: string; title: string; caseNumber: string; client: { id: string } };
-
 export default function ScanAssignScreen() {
   const pages = useMemo(() => getPages(), []);
   const { token } = useAuth();
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [caseId, setCaseId] = useState<string | null>(null);
+  const [destination, setDestination] = useState(EMPTY_DESTINATION);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [filename, setFilename] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -27,18 +31,15 @@ export default function ScanAssignScreen() {
   const { data: clientsData, isLoading: clientsLoading, error: clientsError, refetch: refetchClients } =
     useApi<{ clients: ClientOption[] }>("/clients");
   const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const { data: foldersData } = useApi<{ folders: FolderOption[] }>("/folders");
   const clients = clientsData?.clients ?? [];
   const cases = casesData?.cases ?? [];
+  const folders = foldersData?.folders ?? [];
 
-  const casesForClient = useMemo(
-    () => (clientId ? cases.filter((c) => c.client.id === clientId) : []),
-    [cases, clientId],
-  );
-
-  const canConfirm = Boolean(clientId && caseId && filename.trim() && !isSubmitting && pages.length > 0);
+  const canConfirm = Boolean(destination.clientId && filename.trim() && !isSubmitting && pages.length > 0);
 
   async function confirm() {
-    if (!clientId || !caseId || !filename.trim() || pages.length === 0) return;
+    if (!destination.clientId || !filename.trim() || pages.length === 0) return;
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -73,7 +74,16 @@ export default function ScanAssignScreen() {
       // inline — the file is copied to durable app storage immediately, then the queue
       // screen (and expo-network reconnect listener) drives the actual upload attempts.
       setPhase("queuing");
-      await enqueueUpload({ name, clientId, caseId, fileType, contentType, sizeBytes, sourceUri });
+      await enqueueUpload({
+        name,
+        clientId: destination.clientId,
+        caseId: destination.caseId ?? undefined,
+        folderId: destination.folderId ?? undefined,
+        fileType,
+        contentType,
+        sizeBytes,
+        sourceUri,
+      });
 
       clearPages();
       void processQueue(token); // kick off an attempt now; no-op if offline
@@ -112,58 +122,29 @@ export default function ScanAssignScreen() {
         className="rounded-xl border border-border px-3 py-2.5 text-sm text-foreground"
       />
 
-      <Text className="mt-4 mb-1 text-xs font-medium text-foreground">Client</Text>
+      <Text className="mt-4 mb-1 text-xs font-medium text-foreground">Destination</Text>
       {clientsLoading ? (
         <LoadingState label="Loading clients…" />
       ) : clientsError ? (
         <InlineError message={clientsError} onRetry={refetchClients} />
-      ) : clients.length === 0 ? (
-        <EmptyState icon="people-outline" title="No clients available" />
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View className="flex-row gap-2">
-            {clients.map((c) => (
-              <Pressable
-                key={c.id}
-                onPress={() => {
-                  setClientId(c.id);
-                  setCaseId(null);
-                }}
-                className={`rounded-full border px-3 py-1.5 ${clientId === c.id ? "border-brand bg-brand-muted" : "border-border"}`}
-              >
-                <Text
-                  className={`text-xs ${clientId === c.id ? "font-medium text-brand-foreground" : "text-foreground"}`}
-                >
-                  {c.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-      )}
-
-      <Text className="mt-4 mb-1 text-xs font-medium text-foreground">Case</Text>
-      {!clientId ? (
-        <Text className="text-xs text-muted-foreground">Pick a client first.</Text>
-      ) : casesForClient.length === 0 ? (
-        <EmptyState icon="folder-open-outline" title="No open cases for this client" />
-      ) : (
-        <View className="gap-2">
-          {casesForClient.map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => setCaseId(c.id)}
-              className={`rounded-xl border px-3 py-2.5 ${caseId === c.id ? "border-brand bg-brand-muted" : "border-border"}`}
-            >
-              <Text
-                className={`text-sm ${caseId === c.id ? "font-medium text-brand-foreground" : "text-foreground"}`}
-              >
-                {c.title}
+        <Pressable
+          onPress={() => setPickerOpen(true)}
+          className="flex-row items-center justify-between rounded-xl border border-border px-3 py-2.5"
+        >
+          {destination.clientId ? (
+            <View className="flex-1">
+              <Text className="text-sm font-medium text-foreground">{destination.clientName}</Text>
+              <Text className="text-[11px] text-muted-foreground">
+                {destination.caseTitle ?? "Unfiled"}
+                {destination.folderName ? ` · 📁 ${destination.folderName}` : ""}
               </Text>
-              <Text className="text-[11px] text-muted-foreground">{c.caseNumber}</Text>
-            </Pressable>
-          ))}
-        </View>
+            </View>
+          ) : (
+            <Text className="text-sm text-muted-foreground">Choose a client, case, or folder…</Text>
+          )}
+          <Text className="text-xs font-medium text-brand">{destination.clientId ? "Change" : "Choose"}</Text>
+        </Pressable>
       )}
 
       {submitError ? <InlineError message={submitError} onRetry={confirm} /> : null}
@@ -179,6 +160,16 @@ export default function ScanAssignScreen() {
           {phase === "combining" ? "Combining pages…" : phase === "queuing" ? "Filing…" : "Confirm & upload"}
         </Text>
       </Pressable>
+
+      <DestinationPickerSheet
+        visible={pickerOpen}
+        onOpenChange={setPickerOpen}
+        value={destination}
+        onChange={setDestination}
+        clients={clients}
+        cases={cases}
+        folders={folders}
+      />
     </ScrollView>
   );
 }

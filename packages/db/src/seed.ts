@@ -6,10 +6,12 @@ import { hashPassword } from "./password";
 // (upserts by unique fields, skip-duplicates on the rest).
 
 const STAFF = [
-  // Quick-access dev/demo login requested directly (not part of the mockup roster).
-  { name: "Mareanadzo", username: "mareanadzo", email: "mareanadzo@cmlaw.co.zw", role: "ADMIN" as const, password: "12345678" },
-  { name: "Tafadzwa Chikamhi", username: "t.chikamhi", email: "t.chikamhi@cmlaw.co.zw", role: "ADMIN" as const, password: "ChangeMe123!" },
-  { name: "Rutendo Mareanadzo", username: "r.mareanadzo", email: "r.mareanadzo@cmlaw.co.zw", role: "ADMIN" as const, password: "ChangeMe123!" },
+  // Quick-access dev/demo login requested directly (not part of the mockup roster) — the
+  // first attorney (the ADMIN role was folded into ATTORNEY; there's no separate admin tier
+  // anymore, every attorney has equal management access).
+  { name: "Mareanadzo", username: "mareanadzo", email: "mareanadzo@cmlaw.co.zw", role: "ATTORNEY" as const, password: "12345678" },
+  { name: "Tafadzwa Chikamhi", username: "t.chikamhi", email: "t.chikamhi@cmlaw.co.zw", role: "ATTORNEY" as const, password: "ChangeMe123!" },
+  { name: "Rutendo Mareanadzo", username: "r.mareanadzo", email: "r.mareanadzo@cmlaw.co.zw", role: "ATTORNEY" as const, password: "ChangeMe123!" },
   { name: "Praise Dube", username: "p.dube", email: "p.dube@cmlaw.co.zw", role: "ATTORNEY" as const, password: "ChangeMe123!" },
   { name: "Grace Mpofu", username: "g.mpofu", email: "g.mpofu@cmlaw.co.zw", role: "PARALEGAL" as const, password: "ChangeMe123!" },
   { name: "Simba Nyathi", username: "s.nyathi", email: "s.nyathi@cmlaw.co.zw", role: "PARALEGAL" as const, password: "ChangeMe123!", isActive: false },

@@ -1,0 +1,106 @@
+"use client";
+
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
+import { FileX, Search } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+
+import { EmptyState } from "@/components/empty-state";
+import { StatusPill } from "@/components/status-pill";
+import { CLIENTS, DOCUMENTS, getClient } from "@/lib/mock-data";
+
+export default function DocumentsPage() {
+  const [query, setQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return DOCUMENTS.filter((doc) => {
+      const matchesQuery = !q || doc.name.toLowerCase().includes(q);
+      const matchesClient = !clientFilter || doc.clientId === clientFilter;
+      return matchesQuery && matchesClient;
+    });
+  }, [query, clientFilter]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">Documents</h1>
+        <p className="text-sm text-muted-foreground">
+          {DOCUMENTS.length} documents across all clients and cases
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-64">
+          <InputGroup>
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Search by name or contents…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </InputGroup>
+        </div>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+        >
+          <option value="">All clients</option>
+          {CLIENTS.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="overflow-hidden rounded-none border border-border bg-card">
+        {filtered.length === 0 ? (
+          <EmptyState
+            icon={FileX}
+            title="No documents found"
+            description="Try a different search or filter, or upload a new document."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
+                  <th className="px-4 py-2.5 font-medium">Document</th>
+                  <th className="px-4 py-2.5 font-medium">Case · Client</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Uploaded by</th>
+                  <th className="px-4 py-2.5 font-medium">Modified</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((doc) => {
+                  const client = getClient(doc.clientId);
+                  return (
+                    <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
+                          {doc.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-brand">{client?.name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <StatusPill status={doc.status} />
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{doc.modified}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

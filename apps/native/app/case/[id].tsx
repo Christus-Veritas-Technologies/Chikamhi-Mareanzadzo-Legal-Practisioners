@@ -4,16 +4,12 @@ import { Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { StatusPill } from "@/components/status-pill";
-import {
-  getCase,
-  getClient,
-  getDocumentsForCase,
-  getTimelineForCase,
-  type DocumentStatus,
-} from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
 
 const DOC_TABS = [
   { value: "all", label: "All" },
@@ -23,16 +19,51 @@ const DOC_TABS = [
 
 type DocFilter = (typeof DOC_TABS)[number]["value"];
 
+type CaseDetail = {
+  id: string;
+  caseNumber: string;
+  title: string;
+  status: string;
+  matterType: string;
+  location: string | null;
+  registry: string | null;
+  leadAttorney: string;
+  opened: string;
+  client: { id: string; name: string };
+  documents: { id: string; name: string; status: string; modified: string }[];
+  timeline: { id: string; description: string; actor: string; timestamp: string }[];
+};
+
 export default function CaseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [docFilter, setDocFilter] = useState<DocFilter>("all");
 
-  const matter = getCase(id);
-  const documents = useMemo(() => (matter ? getDocumentsForCase(matter.id) : []), [matter]);
+  const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${id}`);
+  const matter = data?.case;
+
   const filteredDocs = useMemo(() => {
+    const documents = matter?.documents ?? [];
     if (docFilter === "all") return documents;
-    return documents.filter((d) => d.status === (docFilter as DocumentStatus));
-  }, [documents, docFilter]);
+    return documents.filter((d) => formatStatus(d.status) === docFilter);
+  }, [matter, docFilter]);
+
+  if (isLoading) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Case" }} />
+        <LoadingState label="Loading case…" />
+      </Container>
+    );
+  }
+
+  if (error && !error.toLowerCase().includes("not found")) {
+    return (
+      <Container isScrollable={false} className="items-center justify-center px-8">
+        <Stack.Screen options={{ title: "Case" }} />
+        <InlineError message={error} onRetry={refetch} />
+      </Container>
+    );
+  }
 
   if (!matter) {
     return (
@@ -43,8 +74,7 @@ export default function CaseDetailScreen() {
     );
   }
 
-  const client = getClient(matter.clientId);
-  const timeline = getTimelineForCase(matter.id);
+  const timeline = matter.timeline;
 
   return (
     <Container className="px-5 pt-3">
@@ -52,11 +82,11 @@ export default function CaseDetailScreen() {
 
       <View className="flex-row items-center gap-2">
         <Text className="text-[11px] text-muted-foreground">{matter.caseNumber}</Text>
-        <StatusPill status={matter.status} />
+        <StatusPill status={formatStatus(matter.status)} />
       </View>
       <Text className="mt-1 font-serif text-lg font-semibold text-foreground">{matter.title}</Text>
-      {client ? (
-        <Text className="text-xs text-muted-foreground">{client.name}</Text>
+      {matter.client ? (
+        <Text className="text-xs text-muted-foreground">{matter.client.name}</Text>
       ) : null}
 
       <View className="mt-4 flex-row flex-wrap gap-x-6 gap-y-2 border-y border-border py-3">
@@ -105,7 +135,7 @@ export default function CaseDetailScreen() {
                 </Text>
                 <Text className="text-xs text-muted-foreground">{doc.modified}</Text>
               </View>
-              <StatusPill status={doc.status} />
+              <StatusPill status={formatStatus(doc.status)} />
             </View>
           ))
         )}

@@ -2,11 +2,12 @@
 
 import { buttonVariants } from "@CMLP/ui/components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
-import { Bell, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
+
+import { NotificationBell } from "@/components/notification-bell";
 
 export function AppTopbar() {
   const router = useRouter();
@@ -33,15 +34,7 @@ export function AppTopbar() {
         </InputGroup>
       </div>
       <div className="flex-1" />
-      <button
-        type="button"
-        aria-label="Notifications"
-        onClick={() => toast.info("You're all caught up — there's no notification system wired up yet.")}
-        className="relative flex size-8 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-      >
-        <Bell className="size-4" />
-        <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
-      </button>
+      <NotificationBell />
       <Link href="/upload" className={buttonVariants({ size: "lg" })}>
         <Plus />
         Upload

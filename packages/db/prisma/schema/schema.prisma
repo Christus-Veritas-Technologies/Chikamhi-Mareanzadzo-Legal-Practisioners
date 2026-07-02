@@ -48,6 +48,20 @@ enum AuditAction {
   CASE_OPENED
 }
 
+enum NotificationType {
+  CASE_UPLOAD
+  CASE_STATUS_CHANGE
+  OCR_COMPLETE
+}
+
+enum DocumentOcrStatus {
+  NOT_APPLICABLE
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -73,6 +87,7 @@ model User {
   documentsUploaded Document[]      @relation("DocumentUploadedBy")
   documentsDeleted  Document[]      @relation("DocumentDeletedBy")
   auditEntries      AuditLogEntry[] @relation("AuditActor")
+  notifications     Notification[]  @relation("UserNotifications")
 
   @@map("users")
 }
@@ -125,8 +140,9 @@ model Case {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  documents    Document[]
-  auditEntries AuditLogEntry[]
+  documents     Document[]
+  auditEntries  AuditLogEntry[]
+  notifications Notification[]
 
   @@map("cases")
 }
@@ -171,8 +187,15 @@ model Document {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  tags         DocumentTag[]
-  auditEntries AuditLogEntry[]
+  // OCR — runs (via tesseract.js, server-side) after an image document's bytes land in R2.
+  // ocrText is also matched by the documents search filter, making scans full-text searchable.
+  ocrStatus      DocumentOcrStatus @default(NOT_APPLICABLE)
+  ocrText        String?
+  ocrCompletedAt DateTime?
+
+  tags          DocumentTag[]
+  auditEntries  AuditLogEntry[]
+  notifications Notification[]
 
   @@map("documents")
 }
@@ -203,4 +226,24 @@ model AuditLogEntry {
   createdAt   DateTime    @default(now())
 
   @@map("audit_log_entries")
+}
+
+// In-app notifications only (no email/push delivery yet) — surfaced via the bell dropdown
+// on web and native. Created by server-side triggers: case-upload and case-status-change.
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  title      String
+  body       String
+  caseId     String?
+  case       Case?            @relation(fields: [caseId], references: [id])
+  documentId String?
+  document   Document?        @relation(fields: [documentId], references: [id])
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
 }

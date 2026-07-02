@@ -164,11 +164,28 @@ export async function updateCase(c: Context) {
     );
   }
 
+  const user = c.get("user");
+  const before = await prisma.case.findUnique({ where: { id }, select: { status: true, leadAttorneyId: true } });
+
   const wasClosing = parsed.data.status === "CLOSED";
   const matter = await prisma.case.update({
     where: { id },
     data: { ...parsed.data, ...(wasClosing ? { closedAt: new Date() } : {}) },
   });
+
+  // Notify the lead attorney whenever someone else changes the case's status.
+  const statusChanged = parsed.data.status && before && parsed.data.status !== before.status;
+  if (statusChanged && matter.leadAttorneyId && matter.leadAttorneyId !== user.id) {
+    await prisma.notification.create({
+      data: {
+        userId: matter.leadAttorneyId,
+        type: "CASE_STATUS_CHANGE",
+        title: "Case status changed",
+        body: `${matter.title} moved to ${matter.status.replace("_", " ").toLowerCase()}.`,
+        caseId: matter.id,
+      },
+    });
+  }
 
   return c.json({ case: matter });
 }

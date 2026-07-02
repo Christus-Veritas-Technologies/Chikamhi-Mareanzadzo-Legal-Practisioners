@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useThemeColor } from "heroui-native";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
@@ -43,6 +43,9 @@ export default function HomeScreen() {
   const stats = data?.stats;
   const recentDocuments = data?.recentDocuments ?? [];
 
+  const { data: notificationsData } = useApi<{ unreadCount: number }>("/notifications?limit=1");
+  const unreadCount = notificationsData?.unreadCount ?? 0;
+
   return (
     <Container className="px-5 pt-3">
       {/* Header */}
@@ -57,12 +60,14 @@ export default function HomeScreen() {
           </View>
         </View>
         <View className="flex-row items-center gap-3">
-          <Pressable
-            hitSlop={8}
-            onPress={() => Alert.alert("No new notifications", "There's no notification system wired up yet.")}
-          >
-            <Ionicons name="notifications-outline" size={20} color={foreground} />
-          </Pressable>
+          <Link href="/notifications" asChild>
+            <Pressable hitSlop={8} className="relative">
+              <Ionicons name="notifications-outline" size={20} color={foreground} />
+              {unreadCount > 0 ? (
+                <View className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />
+              ) : null}
+            </Pressable>
+          </Link>
           <View className="h-8 w-8 items-center justify-center rounded-full bg-brand-muted">
             <Text className="text-xs font-semibold text-brand-foreground">
               {(user?.name ?? "?")

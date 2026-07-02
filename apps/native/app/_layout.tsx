@@ -54,6 +54,7 @@ function RootNavigator() {
           <Stack.Screen name="settings" options={{ title: "Settings" }} />
           <Stack.Screen name="trash" options={{ title: "Trash" }} />
           <Stack.Screen name="downloads" options={{ title: "Downloads" }} />
+          <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
         </Stack.Protected>
       </Stack>
       {isSignedIn ? <AppDrawer /> : null}

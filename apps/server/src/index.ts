@@ -10,6 +10,7 @@ import clients from "@/routes/clients";
 import dashboard from "@/routes/dashboard";
 import documents from "@/routes/documents";
 import folders from "@/routes/folders";
+import notifications from "@/routes/notifications";
 import tags from "@/routes/tags";
 import users from "@/routes/users";
 
@@ -39,5 +40,6 @@ app.route("/folders", folders);
 app.route("/tags", tags);
 app.route("/audit-log", audit);
 app.route("/users", users);
+app.route("/notifications", notifications);
 
 export default app;

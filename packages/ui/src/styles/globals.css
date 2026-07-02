@@ -7,7 +7,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
+  /* Warm off-white page background (not stark white) to match the brand's paper-like tone;
+     cards stay pure white so they read as distinct surfaces against it. */
+  --background: oklch(0.985 0.006 75);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);

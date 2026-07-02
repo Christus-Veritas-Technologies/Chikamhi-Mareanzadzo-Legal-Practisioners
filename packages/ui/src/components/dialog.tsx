@@ -46,14 +46,14 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-none border border-border bg-background p-5 shadow-lg outline-none transition-all data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-background p-5 shadow-lg outline-none transition-all data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
           className,
         )}
         {...props}
       >
         {children}
         {showClose ? (
-          <DialogClose className="absolute top-4 right-4 rounded-none opacity-70 outline-none transition-opacity hover:opacity-100 disabled:pointer-events-none">
+          <DialogClose className="absolute top-4 right-4 rounded-full opacity-70 outline-none transition-opacity hover:opacity-100 disabled:pointer-events-none">
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </DialogClose>

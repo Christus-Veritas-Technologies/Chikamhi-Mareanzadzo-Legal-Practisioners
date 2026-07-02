@@ -2,7 +2,7 @@
 
 import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
-import { Download, FileText, FileX, Trash2, X } from "lucide-react";
+import { Download, FileText, FileX, Pencil, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -17,17 +17,37 @@ import { formatStatus } from "@/lib/format-status";
 type DocumentDetail = {
   id: string;
   name: string;
+  fileType: string;
   status: string;
   uploadedBy: string;
   modified: string;
   client: { id: string; name: string } | null;
   case: { id: string; title: string } | null;
+  folder: { id: string; name: string } | null;
   tags: { id: string; name: string; colorClass: string }[];
   hasStoredFile: boolean;
   downloadUrl: string | null;
 };
 
 type TagOption = { id: string; name: string; colorClass: string };
+type CaseOption = { id: string; title: string; client: { id: string } };
+type FolderOption = { id: string; name: string };
+type HistoryEntry = { id: string; action: string; description: string; actor: string; timestamp: string };
+
+const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
+const IMAGE_TYPES = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
+
+const ACTION_LABELS: Record<string, string> = {
+  VIEWED: "Viewed",
+  UPLOADED: "Uploaded",
+  SIGNED: "Signed",
+  FILED: "Filed",
+  MOVED: "Moved",
+  DELETED: "Deleted",
+  RESTORED: "Restored",
+  OCR_COMPLETED: "OCR completed",
+  CASE_OPENED: "Case opened",
+};
 
 export default function DocumentViewerPage() {
   const { documentId } = useParams<{ documentId: string }>();
@@ -36,10 +56,20 @@ export default function DocumentViewerPage() {
   const doc = data?.document;
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAddingTag, setIsAddingTag] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   const { data: allTagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const allTags = allTagsData?.tags ?? [];
   const availableTags = allTags.filter((t) => !doc?.tags.some((dt) => dt.id === t.id));
+
+  const { data: casesData } = useApi<{ cases: CaseOption[] }>(doc ? "/cases" : null);
+  const casesForClient = (casesData?.cases ?? []).filter((c) => c.client.id === doc?.client?.id);
+  const { data: foldersData } = useApi<{ folders: FolderOption[] }>(doc ? "/folders" : null);
+  const folders = foldersData?.folders ?? [];
+
+  const { data: historyData } = useApi<{ entries: HistoryEntry[] }>(doc ? `/documents/${documentId}/history` : null);
+  const history = historyData?.entries ?? [];
 
   async function handleDelete() {
     if (!doc) return;
@@ -72,6 +102,35 @@ export default function DocumentViewerPage() {
     refetch();
   }
 
+  async function saveRename() {
+    if (!doc || !nameDraft.trim() || nameDraft.trim() === doc.name) {
+      setIsRenaming(false);
+      return;
+    }
+    await apiFetch(`/documents/${doc.id}`, { method: "PATCH", body: JSON.stringify({ name: nameDraft.trim() }) });
+    setIsRenaming(false);
+    refetch();
+  }
+
+  async function updateStatus(status: string) {
+    if (!doc) return;
+    await apiFetch(`/documents/${doc.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    refetch();
+  }
+
+  async function moveCase(caseId: string) {
+    if (!doc) return;
+    await apiFetch(`/documents/${doc.id}`, { method: "PATCH", body: JSON.stringify({ caseId: caseId || null }) });
+    toast.success("Document moved.");
+    refetch();
+  }
+
+  async function moveFolder(folderId: string) {
+    if (!doc) return;
+    await apiFetch(`/documents/${doc.id}`, { method: "PATCH", body: JSON.stringify({ folderId: folderId || null }) });
+    refetch();
+  }
+
   if (isLoading) {
     return <LoadingState label="Loading document…" />;
   }
@@ -95,123 +154,209 @@ export default function DocumentViewerPage() {
     );
   }
 
+  const isImage = IMAGE_TYPES.has(doc.fileType.toLowerCase());
+  const isPdf = doc.fileType.toLowerCase() === "pdf";
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
-      <Card className="flex min-h-[420px] items-center justify-center bg-muted/30">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <FileText className="size-10 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
-            Preview isn't available in this build yet — download to view the file.
-          </p>
-        </div>
-      </Card>
-
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <div>
-            <p className="text-sm font-medium break-words text-foreground">{doc.name}</p>
-            <div className="mt-1.5">
-              <StatusPill status={formatStatus(doc.status)} />
-            </div>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div>
-              <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Client</p>
-              {doc.client ? (
-                <Link href={`/clients/${doc.client.id}`} className="text-brand hover:underline">
-                  {doc.client.name}
-                </Link>
-              ) : (
-                <p className="text-foreground">—</p>
-              )}
-            </div>
-            <div>
-              <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Case</p>
-              {doc.case ? (
-                <Link href={`/cases/${doc.case.id}`} className="text-brand hover:underline">
-                  {doc.case.title}
-                </Link>
-              ) : (
-                <p className="text-foreground">—</p>
-              )}
-            </div>
-            <div>
-              <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                Uploaded by
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
+        <Card className="flex min-h-[420px] items-center justify-center overflow-hidden bg-muted/30 p-0">
+          {doc.downloadUrl && isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={doc.downloadUrl} alt={doc.name} className="max-h-[600px] w-full object-contain" />
+          ) : doc.downloadUrl && isPdf ? (
+            <iframe src={doc.downloadUrl} title={doc.name} className="h-[600px] w-full border-0" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 p-8 text-center">
+              <FileText className="size-10 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">
+                {doc.hasStoredFile
+                  ? "Preview isn't available for this file type — download to view it."
+                  : "This is a scanned/uploaded document, but no file bytes are stored yet — download won't work until it's re-filed with storage configured."}
               </p>
-              <p className="text-foreground">{doc.uploadedBy}</p>
             </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-col gap-4">
             <div>
-              <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Modified</p>
-              <p className="text-foreground">{doc.modified}</p>
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Tags</p>
-                {availableTags.length > 0 ? (
-                  isAddingTag ? (
-                    <select
-                      autoFocus
-                      defaultValue=""
-                      onChange={(e) => {
-                        addTag(e.target.value);
-                        setIsAddingTag(false);
-                      }}
-                      onBlur={() => setIsAddingTag(false)}
-                      className="h-6 rounded-none border border-input bg-background px-1 text-[11px] text-foreground"
-                    >
-                      <option value="" disabled>
-                        Select tag…
-                      </option>
-                      {availableTags.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingTag(true)}
-                      className="text-[11px] font-medium text-brand hover:underline"
-                    >
-                      + Add
-                    </button>
-                  )
-                ) : null}
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveRename()}
+                  onBlur={saveRename}
+                  className="w-full rounded-none border border-input bg-background px-1.5 py-1 text-sm font-medium text-foreground"
+                />
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium break-words text-foreground">{doc.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(doc.name);
+                      setIsRenaming(true);
+                    }}
+                    aria-label="Rename document"
+                  >
+                    <Pencil className="size-3.5 shrink-0 text-muted-foreground hover:text-foreground" />
+                  </button>
+                </div>
+              )}
+              <div className="mt-1.5">
+                <select
+                  value={doc.status}
+                  onChange={(e) => updateStatus(e.target.value)}
+                  className="h-6 rounded-none border border-input bg-background px-1 text-[11px] text-foreground"
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {formatStatus(s)}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {doc.tags.length === 0 ? (
-                  <p className="text-foreground">—</p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Client</p>
+                {doc.client ? (
+                  <Link href={`/clients/${doc.client.id}`} className="text-brand hover:underline">
+                    {doc.client.name}
+                  </Link>
                 ) : (
-                  doc.tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground"
-                    >
-                      <span className={`size-1.5 rounded-full ${tag.colorClass}`} />
-                      {tag.name}
-                      <button type="button" onClick={() => removeTag(tag.id)} aria-label={`Remove ${tag.name}`}>
-                        <X className="size-2.5 text-muted-foreground hover:text-destructive" />
-                      </button>
-                    </span>
-                  ))
+                  <p className="text-foreground">—</p>
                 )}
               </div>
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Case</p>
+                <select
+                  value={doc.case?.id ?? ""}
+                  onChange={(e) => moveCase(e.target.value)}
+                  className="mt-0.5 h-7 w-full rounded-none border border-input bg-background px-1.5 text-xs text-foreground"
+                >
+                  <option value="">Unfiled</option>
+                  {casesForClient.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Folder</p>
+                <select
+                  value={doc.folder?.id ?? ""}
+                  onChange={(e) => moveFolder(e.target.value)}
+                  className="mt-0.5 h-7 w-full rounded-none border border-input bg-background px-1.5 text-xs text-foreground"
+                >
+                  <option value="">No folder</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                  Uploaded by
+                </p>
+                <p className="text-foreground">{doc.uploadedBy}</p>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Modified</p>
+                <p className="text-foreground">{doc.modified}</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Tags</p>
+                  {availableTags.length > 0 ? (
+                    isAddingTag ? (
+                      <select
+                        autoFocus
+                        defaultValue=""
+                        onChange={(e) => {
+                          addTag(e.target.value);
+                          setIsAddingTag(false);
+                        }}
+                        onBlur={() => setIsAddingTag(false)}
+                        className="h-6 rounded-none border border-input bg-background px-1 text-[11px] text-foreground"
+                      >
+                        <option value="" disabled>
+                          Select tag…
+                        </option>
+                        {availableTags.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingTag(true)}
+                        className="text-[11px] font-medium text-brand hover:underline"
+                      >
+                        + Add
+                      </button>
+                    )
+                  ) : null}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {doc.tags.length === 0 ? (
+                    <p className="text-foreground">—</p>
+                  ) : (
+                    doc.tags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground"
+                      >
+                        <span className={`size-1.5 rounded-full ${tag.colorClass}`} />
+                        {tag.name}
+                        <button type="button" onClick={() => removeTag(tag.id)} aria-label={`Remove ${tag.name}`}>
+                          <X className="size-2.5 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
-          <Button className="w-full" onClick={handleDownload}>
-            <Download />
-            Download
-          </Button>
-          <Button variant="outline" className="w-full" onClick={handleDelete} disabled={isDeleting}>
-            <Trash2 />
-            {isDeleting ? "Deleting…" : "Delete"}
-          </Button>
-        </CardContent>
-      </Card>
+            <Button className="w-full" onClick={handleDownload}>
+              <Download />
+              Download
+            </Button>
+            <Button variant="outline" className="w-full" onClick={handleDelete} disabled={isDeleting}>
+              <Trash2 />
+              {isDeleting ? "Deleting…" : "Delete"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {history.length > 0 ? (
+        <Card>
+          <CardContent>
+            <p className="mb-3 text-xs font-medium text-foreground">History</p>
+            <ol className="space-y-3 border-l border-border pl-4">
+              {history.map((entry) => (
+                <li key={entry.id} className="relative">
+                  <span className="absolute top-1 -left-[21px] size-2 rounded-full bg-brand" />
+                  <p className="text-xs text-foreground">
+                    {ACTION_LABELS[entry.action] ?? entry.action} · {entry.actor}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">{entry.timestamp}</p>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

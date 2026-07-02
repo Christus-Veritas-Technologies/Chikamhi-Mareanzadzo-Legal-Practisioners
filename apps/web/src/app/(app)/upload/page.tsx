@@ -3,65 +3,88 @@
 import { Button } from "@CMLP/ui/components/button";
 import { AlertCircle, CheckCircle2, FileText, RotateCcw, UploadCloud } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
-import { CASES, CLIENTS } from "@/lib/mock-data";
+import { apiFetch, useApi } from "@/hooks/use-api";
 
 type QueueItem = {
   id: string;
   name: string;
-  kind: "pdf" | "docx" | "image";
-  progress: number;
-  state: "uploading" | "done" | "failed";
+  fileType: string;
+  state: "ready" | "uploading" | "done" | "failed";
   clientId?: string;
   caseId?: string;
-  tag?: string;
   errorMessage?: string;
 };
 
-const INITIAL_QUEUE: QueueItem[] = [
-  {
-    id: "q1",
-    name: "Deed of Transfer — Stand 4471.pdf",
-    kind: "pdf",
-    progress: 68,
-    state: "uploading",
-    clientId: "moyo-holdings",
-    caseId: "stand-4471-transfer",
-  },
-  {
-    id: "q2",
-    name: "Scan — Rates Clearance.jpg",
-    kind: "image",
-    progress: 100,
-    state: "done",
-    clientId: "bulawayo-city-council",
-    tag: "Rates",
-  },
-  {
-    id: "q3",
-    name: "Board Minutes 2024.docx",
-    kind: "docx",
-    progress: 42,
-    state: "failed",
-    errorMessage: "Network interrupted at 42% — the file was not saved to R2.",
-  },
-];
+type ClientOption = { id: string; name: string };
+type CaseOption = { id: string; title: string; client: { id: string } };
+
+function extToFileType(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "file";
+  return ext;
+}
 
 export default function UploadPage() {
-  const [queue, setQueue] = useState<QueueItem[]>(INITIAL_QUEUE);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [isFiling, setIsFiling] = useState(false);
 
-  function retry(id: string) {
-    setQueue((q) =>
-      q.map((item) => (item.id === id ? { ...item, state: "uploading", progress: 0, errorMessage: undefined } : item)),
-    );
+  const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
+  const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const clients = clientsData?.clients ?? [];
+  const cases = casesData?.cases ?? [];
+
+  function handleFilesSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const items: QueueItem[] = Array.from(files).map((file, i) => ({
+      id: `${Date.now()}-${i}`,
+      name: file.name,
+      fileType: extToFileType(file.name),
+      state: "ready",
+    }));
+    setQueue((q) => [...q, ...items]);
   }
 
   function updateItem(id: string, patch: Partial<QueueItem>) {
     setQueue((q) => q.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
-  const readyCount = queue.filter((i) => i.state !== "failed").length;
+  function retry(id: string) {
+    updateItem(id, { state: "ready", errorMessage: undefined });
+  }
+
+  const readyCount = queue.filter((i) => i.state === "ready").length;
   const needsAttention = queue.filter((i) => i.state === "failed").length;
+
+  async function fileAll() {
+    setIsFiling(true);
+    try {
+      for (const item of queue) {
+        if (item.state !== "ready" || !item.clientId) continue;
+        updateItem(item.id, { state: "uploading" });
+        try {
+          await apiFetch("/documents", {
+            method: "POST",
+            body: JSON.stringify({
+              name: item.name,
+              fileType: item.fileType,
+              clientId: item.clientId,
+              caseId: item.caseId || undefined,
+            }),
+          });
+          updateItem(item.id, { state: "done" });
+        } catch (err) {
+          updateItem(item.id, {
+            state: "failed",
+            errorMessage: err instanceof Error ? err.message : "Upload failed.",
+          });
+        }
+      }
+      toast.success("Documents filed.");
+    } finally {
+      setIsFiling(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,7 +102,15 @@ export default function UploadPage() {
         <span className="mt-2 inline-flex h-8 items-center rounded-none bg-primary px-3 text-xs font-medium text-primary-foreground">
           Browse files
         </span>
-        <input type="file" multiple className="hidden" />
+        <input
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleFilesSelected(e.target.files);
+            e.target.value = "";
+          }}
+        />
       </label>
 
       {queue.length === 0 ? (
@@ -108,21 +139,12 @@ export default function UploadPage() {
                   {item.state === "done" ? (
                     <span className="flex items-center gap-1 text-xs text-success">
                       <CheckCircle2 className="size-3.5" />
-                      Uploaded{item.tag ? " · OCR done" : ""}
+                      Filed
                     </span>
                   ) : item.state === "uploading" ? (
-                    <span className="text-xs text-muted-foreground">{item.progress}%</span>
+                    <span className="text-xs text-muted-foreground">Filing…</span>
                   ) : null}
                 </div>
-
-                {item.state === "uploading" ? (
-                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-brand transition-all"
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
-                ) : null}
 
                 {item.state === "failed" ? (
                   <div className="mt-2 flex items-start justify-between gap-3 rounded-none border border-destructive/30 bg-destructive/10 px-2.5 py-2">
@@ -138,7 +160,7 @@ export default function UploadPage() {
                       Retry
                     </Button>
                   </div>
-                ) : (
+                ) : item.state === "ready" ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <select
                       value={item.clientId ?? ""}
@@ -146,7 +168,7 @@ export default function UploadPage() {
                       className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">Select client…</option>
-                      {CLIENTS.map((c) => (
+                      {clients.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
@@ -156,36 +178,28 @@ export default function UploadPage() {
                       value={item.caseId ?? ""}
                       onChange={(e) => updateItem(item.id, { caseId: e.target.value })}
                       className="h-7 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+                      disabled={!item.clientId}
                     >
                       <option value="">Select case…</option>
-                      {CASES.filter((c) => c.clientId === item.clientId).map((c) => (
+                      {cases.filter((c) => c.client.id === item.clientId).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.title}
                         </option>
                       ))}
                     </select>
-                    {item.tag ? (
-                      <span className="rounded-full bg-brand-muted px-2 py-0.5 text-[11px] font-medium text-brand-foreground">
-                        {item.tag}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="rounded-none border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
-                        onClick={() => updateItem(item.id, { tag: "Tagged" })}
-                      >
-                        + Add tag
-                      </button>
-                    )}
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline">Cancel</Button>
-            <Button>File {readyCount} documents</Button>
+            <Button variant="outline" onClick={() => setQueue([])}>
+              Cancel
+            </Button>
+            <Button onClick={fileAll} disabled={isFiling || readyCount === 0}>
+              {isFiling ? "Filing…" : `File ${readyCount} documents`}
+            </Button>
           </div>
         </div>
       )}

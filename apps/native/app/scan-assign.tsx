@@ -3,25 +3,60 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
-import { CASES, CLIENTS } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
+
+type ClientOption = { id: string; name: string };
+type CaseOption = { id: string; title: string; caseNumber: string; client: { id: string } };
+
+function extToFileType(name: string) {
+  return name.split(".").pop()?.toLowerCase() ?? "file";
+}
 
 export default function ScanAssignScreen() {
   const { count } = useLocalSearchParams<{ count: string }>();
+  const { token } = useAuth();
   const [clientId, setClientId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [filename, setFilename] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const { data: clientsData, isLoading: clientsLoading, error: clientsError, refetch: refetchClients } =
+    useApi<{ clients: ClientOption[] }>("/clients");
+  const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const clients = clientsData?.clients ?? [];
+  const cases = casesData?.cases ?? [];
 
   const casesForClient = useMemo(
-    () => (clientId ? CASES.filter((c) => c.clientId === clientId) : []),
-    [clientId],
+    () => (clientId ? cases.filter((c) => c.client.id === clientId) : []),
+    [cases, clientId],
   );
 
-  const canConfirm = Boolean(clientId && caseId && filename.trim());
+  const canConfirm = Boolean(clientId && caseId && filename.trim() && !isSubmitting);
 
-  function confirm() {
-    if (!canConfirm) return;
-    router.replace({ pathname: "/upload-queue", params: { justAdded: filename } });
+  async function confirm() {
+    if (!clientId || !caseId || !filename.trim() || !token) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await apiFetch(
+        "/documents",
+        {
+          method: "POST",
+          body: { name: filename.trim(), fileType: extToFileType(filename.trim()), clientId, caseId },
+          token,
+        },
+      );
+      router.replace({ pathname: "/upload-queue", params: { justAdded: filename } });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Couldn't file this scan.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -42,12 +77,16 @@ export default function ScanAssignScreen() {
       />
 
       <Text className="mt-4 mb-1 text-xs font-medium text-foreground">Client</Text>
-      {CLIENTS.length === 0 ? (
+      {clientsLoading ? (
+        <LoadingState label="Loading clients…" />
+      ) : clientsError ? (
+        <InlineError message={clientsError} onRetry={refetchClients} />
+      ) : clients.length === 0 ? (
         <EmptyState icon="people-outline" title="No clients available" />
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-2">
-            {CLIENTS.map((c) => (
+            {clients.map((c) => (
               <Pressable
                 key={c.id}
                 onPress={() => {
@@ -91,6 +130,8 @@ export default function ScanAssignScreen() {
         </View>
       )}
 
+      {submitError ? <InlineError message={submitError} onRetry={confirm} /> : null}
+
       <Pressable
         onPress={confirm}
         disabled={!canConfirm}
@@ -99,7 +140,7 @@ export default function ScanAssignScreen() {
         <Text
           className={`text-sm font-semibold ${canConfirm ? "text-primary-foreground" : "text-muted-foreground"}`}
         >
-          Confirm & upload
+          {isSubmitting ? "Filing…" : "Confirm & upload"}
         </Text>
       </Pressable>
     </ScrollView>

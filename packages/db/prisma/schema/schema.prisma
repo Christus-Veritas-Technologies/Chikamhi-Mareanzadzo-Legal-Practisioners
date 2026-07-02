@@ -9,8 +9,11 @@ datasource db {
   provider = "postgresql"
 }
 
+// Two roles only. Attorneys can do everything a Paralegal can, plus: manage staff accounts
+// (Users & Roles is an attorney-only page), view the firm-wide Audit Log, and delete
+// clients/cases/folders/tags. The old ADMIN role was folded into ATTORNEY — every ADMIN
+// account becomes ATTORNEY (see the migration that narrows this enum).
 enum StaffRole {
-  ADMIN
   ATTORNEY
   PARALEGAL
 }
@@ -92,6 +95,10 @@ model User {
   notifications     Notification[]  @relation("UserNotifications")
   deadlinesCreated  Deadline[]      @relation("DeadlineCreatedBy")
   documentsSigned   DocumentSignature[] @relation("DocumentSignedBy")
+  clientsDeleted    Client[]        @relation("ClientDeletedBy")
+  casesDeleted      Case[]          @relation("CaseDeletedBy")
+  foldersDeleted    Folder[]        @relation("FolderDeletedBy")
+  tagsDeleted       Tag[]           @relation("TagDeletedBy")
 
   @@map("users")
 }
@@ -104,6 +111,9 @@ model Client {
   attorneyOfRecordId String?
   attorneyOfRecord   User?      @relation("ClientAttorneyOfRecord", fields: [attorneyOfRecordId], references: [id])
   clientSince        DateTime   @default(now())
+  deletedAt          DateTime?
+  deletedById        String?
+  deletedBy          User?      @relation("ClientDeletedBy", fields: [deletedById], references: [id])
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
@@ -141,6 +151,9 @@ model Case {
   registry       String?
   openedAt       DateTime   @default(now())
   closedAt       DateTime?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletedBy      User?      @relation("CaseDeletedBy", fields: [deletedById], references: [id])
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -173,22 +186,42 @@ model Deadline {
 }
 
 model Folder {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  documents Document[]
+  id          String      @id @default(cuid())
+  name        String      @unique
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?       @relation("FolderDeletedBy", fields: [deletedById], references: [id])
+  createdAt   DateTime    @default(now())
+  documents   Document[]
+  tags        FolderTag[]
 
   @@map("folders")
 }
 
 model Tag {
-  id         String        @id @default(cuid())
-  name       String        @unique
-  colorClass String        @default("bg-muted-foreground")
-  createdAt  DateTime      @default(now())
-  documents  DocumentTag[]
+  id          String        @id @default(cuid())
+  name        String        @unique
+  colorClass  String        @default("bg-muted-foreground")
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?         @relation("TagDeletedBy", fields: [deletedById], references: [id])
+  createdAt   DateTime      @default(now())
+  documents   DocumentTag[]
+  folders     FolderTag[]
 
   @@map("tags")
+}
+
+// A folder can carry multiple tags (e.g. "Conveyancing" + "Bulawayo") — separate from
+// DocumentTag, which tags individual documents.
+model FolderTag {
+  folderId String
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([folderId, tagId])
+  @@map("folder_tags")
 }
 
 model Document {

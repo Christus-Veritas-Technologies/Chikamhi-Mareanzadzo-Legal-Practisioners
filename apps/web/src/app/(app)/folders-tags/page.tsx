@@ -23,6 +23,8 @@ export default function FoldersTagsPage() {
   const [addingFolder, setAddingFolder] = useState(false);
   const [isSavingFolder, setIsSavingFolder] = useState(false);
   const [isSavingTag, setIsSavingTag] = useState(false);
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagName, setEditingTagName] = useState("");
 
   const totalDocs = folders.reduce((sum, f) => sum + f.documentCount, 0);
 
@@ -47,6 +49,24 @@ export default function FoldersTagsPage() {
     } finally {
       setIsSavingTag(false);
     }
+  }
+
+  function startEditingTag(tag: Tag) {
+    setEditingTagId(tag.id);
+    setEditingTagName(tag.name);
+  }
+
+  async function saveTagName() {
+    if (!editingTagId || !editingTagName.trim()) {
+      setEditingTagId(null);
+      return;
+    }
+    await apiFetch(`/tags/${editingTagId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: editingTagName.trim() }),
+    });
+    setEditingTagId(null);
+    refetchTags();
   }
 
   return (
@@ -160,11 +180,24 @@ export default function FoldersTagsPage() {
               >
                 <div className="flex items-center gap-2.5">
                   <span className={`size-2.5 rounded-full ${tag.colorClass}`} />
-                  <span className="text-sm text-foreground">{tag.name}</span>
+                  {editingTagId === tag.id ? (
+                    <input
+                      autoFocus
+                      value={editingTagName}
+                      onChange={(e) => setEditingTagName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && saveTagName()}
+                      onBlur={saveTagName}
+                      className="h-6 rounded-none border border-input bg-background px-1.5 text-sm text-foreground"
+                    />
+                  ) : (
+                    <span className="text-sm text-foreground">{tag.name}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">{tag.documentCount} docs</span>
-                  <Pencil className="size-3.5 text-muted-foreground" />
+                  <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`}>
+                    <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                  </button>
                 </div>
               </div>
             ))}

@@ -31,7 +31,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "C&M DMS uses your photo library to set a profile photo."
+          "photosPermission": "C&M DMS uses your photo library to set a profile photo and to upload documents."
         }
       ]
     ],

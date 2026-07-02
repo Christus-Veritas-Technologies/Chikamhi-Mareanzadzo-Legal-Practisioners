@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RouteError } from "@/components/route-error";
+import { setGalleryItems } from "@/lib/gallery-session";
 import { setPages } from "@/lib/scan-session";
 
 export default function ScanScreen() {
@@ -14,6 +16,7 @@ export default function ScanScreen() {
   const [facing, setFacing] = useState<CameraType>("back");
   const [pages, setLocalPages] = useState<string[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isPickingGallery, setIsPickingGallery] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
   async function capture() {
@@ -28,6 +31,36 @@ export default function ScanScreen() {
       // Camera hiccup — let the user just try the shutter again.
     } finally {
       setIsCapturing(false);
+    }
+  }
+
+  // Gallery picks upload as independent documents (multi-select), unlike camera pages
+  // which combine into a single multi-page scan — so this routes to its own assign screen.
+  async function pickFromGallery() {
+    if (isPickingGallery) return;
+    setIsPickingGallery(true);
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      if (result.canceled || result.assets.length === 0) return;
+
+      setGalleryItems(
+        result.assets.map((asset, i) => ({
+          uri: asset.uri,
+          name: asset.fileName ?? `photo-${i + 1}.jpg`,
+          mimeType: asset.mimeType ?? "image/jpeg",
+          sizeBytes: asset.fileSize,
+        })),
+      );
+      router.push({ pathname: "/gallery-assign", params: { count: String(result.assets.length) } });
+    } finally {
+      setIsPickingGallery(false);
     }
   }
 
@@ -96,9 +129,18 @@ export default function ScanScreen() {
       ) : null}
 
       <View
-        className="flex-row items-center justify-center px-8 pt-2"
+        className="flex-row items-center justify-between px-8 pt-2"
         style={{ paddingBottom: insets.bottom + 24 }}
       >
+        <Pressable
+          onPress={pickFromGallery}
+          disabled={isPickingGallery}
+          className="h-11 w-11 items-center justify-center rounded-full bg-ink-foreground/10"
+          style={{ opacity: isPickingGallery ? 0.6 : 1 }}
+        >
+          <Ionicons name="images-outline" size={20} color="#F5F0E6" />
+        </Pressable>
+
         <Pressable
           onPress={capture}
           disabled={isCapturing}
@@ -107,6 +149,8 @@ export default function ScanScreen() {
         >
           <View className="h-12 w-12 rounded-full bg-brand" />
         </Pressable>
+
+        <View className="h-11 w-11" />
       </View>
     </View>
   );

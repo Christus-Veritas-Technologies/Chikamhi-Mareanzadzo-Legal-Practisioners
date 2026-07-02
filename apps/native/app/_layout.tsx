@@ -46,6 +46,7 @@ function RootNavigator() {
           <Stack.Screen name="case/[id]" options={{ headerBackTitle: "Back" }} />
           <Stack.Screen name="scan-review" options={{ headerBackTitle: "Scan" }} />
           <Stack.Screen name="scan-assign" options={{ headerBackTitle: "Back" }} />
+          <Stack.Screen name="gallery-assign" options={{ headerBackTitle: "Scan" }} />
           <Stack.Screen name="upload-queue" options={{ headerBackTitle: "Back" }} />
           <Stack.Screen name="doc/[id]" options={{ headerBackTitle: "Back" }} />
           <Stack.Screen name="clients" options={{ title: "Clients" }} />

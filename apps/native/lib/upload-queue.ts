@@ -15,7 +15,8 @@ export type QueuedUpload = {
   id: string;
   name: string;
   clientId: string;
-  caseId: string;
+  caseId?: string;
+  folderId?: string;
   fileType: string;
   contentType: string;
   sizeBytes?: number;
@@ -80,7 +81,8 @@ function removeEntry(id: string) {
 export async function enqueueUpload(job: {
   name: string;
   clientId: string;
-  caseId: string;
+  caseId?: string;
+  folderId?: string;
   fileType: string;
   contentType: string;
   sizeBytes?: number;
@@ -101,6 +103,7 @@ export async function enqueueUpload(job: {
     name: job.name,
     clientId: job.clientId,
     caseId: job.caseId,
+    folderId: job.folderId,
     fileType: job.fileType,
     contentType: job.contentType,
     sizeBytes: job.sizeBytes,
@@ -150,6 +153,7 @@ export async function processQueue(token: string | null): Promise<void> {
             fileType: entry.fileType,
             clientId: entry.clientId,
             caseId: entry.caseId,
+            folderId: entry.folderId,
             contentType: entry.contentType,
             sizeBytes: entry.sizeBytes,
           },
@@ -163,7 +167,9 @@ export async function processQueue(token: string | null): Promise<void> {
             headers: { "Content-Type": entry.contentType },
             body: blob,
           });
-          if (!putRes.ok) throw new Error("Couldn't upload this scan to storage.");
+          if (!putRes.ok) {
+            throw new Error(`Couldn't upload this scan to storage (${putRes.status}). Will retry automatically.`);
+          }
 
           // Tells the server the bytes have actually landed in R2 — that's what kicks off
           // OCR for eligible file types (plain image scans). Best-effort: OCR just won't

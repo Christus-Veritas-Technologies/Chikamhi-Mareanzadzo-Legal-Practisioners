@@ -3,11 +3,22 @@ import { hashPassword } from "@CMLP/db/password";
 import type { Context } from "hono";
 import { z } from "zod";
 
+import { paginationMeta, parsePagination } from "@/lib/pagination";
 import { serializeUser } from "@/lib/serializers";
 
 export async function listUsers(c: Context) {
-  const users = await prisma.user.findMany({ orderBy: { name: "asc" } });
-  return c.json({ users: users.map(serializeUser) });
+  // Higher default than other list endpoints: /users also feeds "lead attorney" /
+  // "attorney of record" dropdowns elsewhere that expect the full staff roster.
+  const pagination = parsePagination(c, 100);
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { name: "asc" },
+      skip: pagination.offset,
+      take: pagination.limit,
+    }),
+    prisma.user.count(),
+  ]);
+  return c.json({ users: users.map(serializeUser), pagination: paginationMeta(total, pagination) });
 }
 
 function slugifyUsername(name: string) {

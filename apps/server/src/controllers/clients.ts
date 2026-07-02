@@ -2,6 +2,8 @@ import prisma from "@CMLP/db";
 import type { Context } from "hono";
 import { z } from "zod";
 
+import { paginationMeta, parsePagination } from "@/lib/pagination";
+
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 GB";
   const gb = bytes / 1024 ** 3;
@@ -9,14 +11,24 @@ function formatBytes(bytes: number) {
 }
 
 export async function listClients(c: Context) {
-  const [clients, storageByClient] = await Promise.all([
+  const search = c.req.query("q");
+  // Higher default than other list endpoints: /clients also feeds filter dropdowns
+  // elsewhere in the app that expect the (realistically small) full client roster.
+  const pagination = parsePagination(c, 100);
+  const where = search ? { name: { contains: search, mode: "insensitive" as const } } : {};
+
+  const [clients, total, storageByClient] = await Promise.all([
     prisma.client.findMany({
+      where,
       orderBy: { updatedAt: "desc" },
+      skip: pagination.offset,
+      take: pagination.limit,
       include: {
         attorneyOfRecord: { select: { name: true } },
         _count: { select: { cases: true, documents: true } },
       },
     }),
+    prisma.client.count({ where }),
     prisma.document.groupBy({
       by: ["clientId"],
       _sum: { sizeBytes: true },
@@ -38,6 +50,7 @@ export async function listClients(c: Context) {
       storage: formatBytes(storageMap.get(client.id) ?? 0),
       updatedAt: client.updatedAt.toISOString(),
     })),
+    pagination: paginationMeta(total, pagination),
   });
 }
 

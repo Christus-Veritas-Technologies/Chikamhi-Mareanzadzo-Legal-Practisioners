@@ -3,7 +3,8 @@
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
 import { FileX, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
@@ -22,22 +23,44 @@ type DocumentRow = {
 };
 
 type ClientOption = { id: string; name: string };
+type CaseOption = { id: string; title: string; client: { id: string } };
+type TagOption = { id: string; name: string };
+
+const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
 
 export default function DocumentsPage() {
-  const [query, setQuery] = useState("");
-  const [clientFilter, setClientFilter] = useState("");
+  return (
+    <Suspense fallback={<LoadingState label="Loading documents…" />}>
+      <DocumentsPageInner />
+    </Suspense>
+  );
+}
 
-  const path = clientFilter ? `/documents?clientId=${clientFilter}` : "/documents";
+function DocumentsPageInner() {
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [clientFilter, setClientFilter] = useState("");
+  const [caseFilter, setCaseFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const params = new URLSearchParams();
+  if (query.trim()) params.set("q", query.trim());
+  if (clientFilter) params.set("clientId", clientFilter);
+  if (caseFilter) params.set("caseId", caseFilter);
+  if (tagFilter) params.set("tagId", tagFilter);
+  if (statusFilter) params.set("status", statusFilter);
+  const search = params.toString();
+  const path = search ? `/documents?${search}` : "/documents";
+
   const { data, isLoading, error, refetch } = useApi<{ documents: DocumentRow[] }>(path, [path]);
   const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
+  const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const { data: tagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const documents = data?.documents ?? [];
   const clients = clientsData?.clients ?? [];
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return documents;
-    return documents.filter((doc) => doc.name.toLowerCase().includes(q));
-  }, [documents, query]);
+  const cases = (casesData?.cases ?? []).filter((c) => !clientFilter || c.client.id === clientFilter);
+  const tags = tagsData?.tags ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,13 +86,52 @@ export default function DocumentsPage() {
         </div>
         <select
           value={clientFilter}
-          onChange={(e) => setClientFilter(e.target.value)}
+          onChange={(e) => {
+            setClientFilter(e.target.value);
+            setCaseFilter("");
+          }}
           className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
         >
           <option value="">All clients</option>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={caseFilter}
+          onChange={(e) => setCaseFilter(e.target.value)}
+          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+        >
+          <option value="">All cases</option>
+          {cases.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
+        <select
+          value={tagFilter}
+          onChange={(e) => setTagFilter(e.target.value)}
+          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+        >
+          <option value="">All tags</option>
+          {tags.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="h-8 rounded-none border border-input bg-background px-2 text-xs text-foreground"
+        >
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {formatStatus(s)}
             </option>
           ))}
         </select>
@@ -80,7 +142,7 @@ export default function DocumentsPage() {
           <LoadingState label="Loading documents…" />
         ) : error ? (
           <InlineError message={error} onRetry={refetch} />
-        ) : filtered.length === 0 ? (
+        ) : documents.length === 0 ? (
           <EmptyState
             icon={FileX}
             title="No documents found"
@@ -99,14 +161,14 @@ export default function DocumentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((doc) => (
+                {documents.map((doc) => (
                   <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                     <td className="px-4 py-3">
                       <Link href={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-brand">
                         {doc.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-brand">{doc.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-brand">{doc.case?.title ?? doc.client?.name ?? "—"}</td>
                     <td className="px-4 py-3">
                       <StatusPill status={formatStatus(doc.status)} />
                     </td>

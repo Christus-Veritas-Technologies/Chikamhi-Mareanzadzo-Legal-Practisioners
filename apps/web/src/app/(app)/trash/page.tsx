@@ -1,30 +1,64 @@
 "use client";
 
 import { Button } from "@CMLP/ui/components/button";
-import { Trash2 } from "lucide-react";
+import { Info, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { apiFetch, useApi } from "@/hooks/use-api";
-import { relativeTime } from "@/lib/format-time";
 
-type TrashedDoc = { id: string; name: string; deletedAt: string };
+type TrashedDoc = {
+  id: string;
+  name: string;
+  client: { id: string; name: string } | null;
+  case: { id: string; title: string } | null;
+  deletedBy: string;
+  deletedAt: string;
+  purgesInDays: number;
+};
 
 export default function TrashPage() {
   const { data, isLoading, error, refetch } = useApi<{ documents: TrashedDoc[] }>("/documents/trash");
   const items = data?.documents ?? [];
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   async function restore(id: string) {
-    await apiFetch(`/documents/${id}/restore`, { method: "POST" });
-    refetch();
+    setPendingId(id);
+    try {
+      await apiFetch(`/documents/${id}/restore`, { method: "POST" });
+      refetch();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function permanentlyDelete(id: string, name: string) {
+    if (!window.confirm(`Permanently delete "${name}"? This can't be undone.`)) return;
+    setPendingId(id);
+    try {
+      await apiFetch(`/documents/${id}/permanent`, { method: "DELETE" });
+      toast.success("Document permanently deleted.");
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete document.");
+    } finally {
+      setPendingId(null);
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Trash</h1>
-        <p className="text-sm text-muted-foreground">
-          Deleted documents are kept for 30 days before being permanently removed.
+      </div>
+
+      <div className="flex items-start gap-2 rounded-none border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foreground">
+        <Info className="mt-0.5 size-4 shrink-0 text-warning" />
+        <p>
+          Deleted documents are retained for <span className="font-semibold">30 days</span>, then permanently purged
+          from R2. Restoring returns a document to its original case.
         </p>
       </div>
 
@@ -41,7 +75,9 @@ export default function TrashPage() {
               <thead>
                 <tr className="border-b border-border text-[10px] tracking-wide text-muted-foreground uppercase">
                   <th className="px-4 py-2.5 font-medium">Document</th>
-                  <th className="px-4 py-2.5 font-medium">Deleted</th>
+                  <th className="px-4 py-2.5 font-medium">Case · Client</th>
+                  <th className="px-4 py-2.5 font-medium">Deleted by</th>
+                  <th className="px-4 py-2.5 font-medium">Purges in</th>
                   <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
@@ -49,13 +85,32 @@ export default function TrashPage() {
                 {items.map((item) => (
                   <tr key={item.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3 font-medium text-foreground">{item.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {item.deletedAt ? relativeTime(item.deletedAt) : "—"}
+                    <td className="px-4 py-3 text-brand">{item.case?.title ?? item.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.deletedBy}</td>
+                    <td
+                      className={`px-4 py-3 font-medium ${item.purgesInDays <= 5 ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {item.purgesInDays} days
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button size="sm" variant="outline" onClick={() => restore(item.id)}>
-                        Restore
-                      </Button>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => restore(item.id)}
+                          disabled={pendingId === item.id}
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => permanentlyDelete(item.id, item.name)}
+                          disabled={pendingId === item.id}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

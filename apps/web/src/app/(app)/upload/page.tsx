@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@CMLP/ui/components/button";
-import { AlertCircle, CheckCircle2, FileText, RotateCcw, UploadCloud } from "lucide-react";
+import { cn } from "@CMLP/ui/lib/utils";
+import { AlertCircle, CheckCircle2, FileText, Plus, RotateCcw, UploadCloud, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -9,17 +10,21 @@ import { apiFetch, useApi } from "@/hooks/use-api";
 
 type QueueItem = {
   id: string;
+  documentId?: string;
   name: string;
   fileType: string;
   file: File;
   state: "ready" | "uploading" | "done" | "failed";
   clientId?: string;
   caseId?: string;
+  tagIds: string[];
   errorMessage?: string;
+  tagPickerOpen?: boolean;
 };
 
 type ClientOption = { id: string; name: string };
 type CaseOption = { id: string; title: string; client: { id: string } };
+type TagOption = { id: string; name: string };
 
 function extToFileType(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "file";
@@ -32,8 +37,10 @@ export default function UploadPage() {
 
   const { data: clientsData } = useApi<{ clients: ClientOption[] }>("/clients");
   const { data: casesData } = useApi<{ cases: CaseOption[] }>("/cases");
+  const { data: tagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const clients = clientsData?.clients ?? [];
   const cases = casesData?.cases ?? [];
+  const tags = tagsData?.tags ?? [];
 
   function handleFilesSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -43,6 +50,7 @@ export default function UploadPage() {
       fileType: extToFileType(file.name),
       file,
       state: "ready",
+      tagIds: [],
     }));
     setQueue((q) => [...q, ...items]);
   }
@@ -65,7 +73,10 @@ export default function UploadPage() {
         if (item.state !== "ready" || !item.clientId) continue;
         updateItem(item.id, { state: "uploading" });
         try {
-          const { uploadUrl } = await apiFetch<{ uploadUrl: string | null }>("/documents", {
+          const { document, uploadUrl } = await apiFetch<{
+            document: { id: string };
+            uploadUrl: string | null;
+          }>("/documents", {
             method: "POST",
             body: JSON.stringify({
               name: item.name,
@@ -88,7 +99,14 @@ export default function UploadPage() {
             if (!putRes.ok) throw new Error("File upload to storage failed.");
           }
 
-          updateItem(item.id, { state: "done" });
+          for (const tagId of item.tagIds) {
+            await apiFetch(`/documents/${document.id}/tags`, {
+              method: "POST",
+              body: JSON.stringify({ tagId }),
+            }).catch(() => {});
+          }
+
+          updateItem(item.id, { state: "done", documentId: document.id });
         } catch (err) {
           updateItem(item.id, {
             state: "failed",
@@ -99,6 +117,29 @@ export default function UploadPage() {
       toast.success("Documents filed.");
     } finally {
       setIsFiling(false);
+    }
+  }
+
+  async function toggleTag(item: QueueItem, tagId: string) {
+    const has = item.tagIds.includes(tagId);
+    const nextTagIds = has ? item.tagIds.filter((t) => t !== tagId) : [...item.tagIds, tagId];
+    updateItem(item.id, { tagIds: nextTagIds });
+
+    // If the document has already been filed, sync the tag change immediately.
+    if (item.documentId) {
+      try {
+        if (has) {
+          await apiFetch(`/documents/${item.documentId}/tags/${tagId}`, { method: "DELETE" });
+        } else {
+          await apiFetch(`/documents/${item.documentId}/tags`, {
+            method: "POST",
+            body: JSON.stringify({ tagId }),
+          });
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Couldn't update tag.");
+        updateItem(item.id, { tagIds: item.tagIds });
+      }
     }
   }
 
@@ -155,7 +196,7 @@ export default function UploadPage() {
                   {item.state === "done" ? (
                     <span className="flex items-center gap-1 text-xs text-success">
                       <CheckCircle2 className="size-3.5" />
-                      Filed
+                      Uploaded · OCR done
                     </span>
                   ) : item.state === "uploading" ? (
                     <span className="text-xs text-muted-foreground">Filing…</span>
@@ -203,6 +244,62 @@ export default function UploadPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                ) : null}
+
+                {item.state === "ready" || item.state === "done" ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {item.tagIds.map((tagId) => {
+                      const tag = tags.find((t) => t.id === tagId);
+                      if (!tag) return null;
+                      return (
+                        <span
+                          key={tagId}
+                          className="inline-flex items-center gap-1 rounded-full bg-brand-muted px-2 py-0.5 text-[11px] font-medium text-brand-foreground"
+                        >
+                          {tag.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleTag(item, tagId)}
+                            aria-label={`Remove tag ${tag.name}`}
+                          >
+                            <X className="size-2.5" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, { tagPickerOpen: !item.tagPickerOpen })}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/50"
+                      >
+                        <Plus className="size-2.5" />
+                        Add tag
+                      </button>
+                      {item.tagPickerOpen ? (
+                        <div className="absolute top-full left-0 z-10 mt-1 flex max-h-40 w-40 flex-col gap-0.5 overflow-y-auto rounded-none border border-border bg-popover p-1 shadow-md">
+                          {tags.length === 0 ? (
+                            <p className="px-2 py-1 text-[11px] text-muted-foreground">No tags yet.</p>
+                          ) : (
+                            tags.map((tag) => (
+                              <button
+                                key={tag.id}
+                                type="button"
+                                onClick={() => toggleTag(item, tag.id)}
+                                className={cn(
+                                  "flex items-center justify-between rounded-none px-2 py-1 text-left text-[11px] hover:bg-muted/60",
+                                  item.tagIds.includes(tag.id) && "font-semibold text-brand",
+                                )}
+                              >
+                                {tag.name}
+                                {item.tagIds.includes(tag.id) ? <CheckCircle2 className="size-3" /> : null}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
               </div>

@@ -9,6 +9,12 @@ export type CurrentUser = {
   username: string;
   role: string;
   isActive: boolean;
+  avatarUrl?: string | null;
+  notifications?: {
+    caseUpload: boolean;
+    ocrComplete: boolean;
+    weeklyDigest: boolean;
+  };
 };
 
 const CurrentUserContext = createContext<CurrentUser | null>(null);

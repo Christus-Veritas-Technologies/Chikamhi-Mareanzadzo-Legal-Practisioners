@@ -116,15 +116,26 @@ export function AppSidebar() {
       </div>
 
       <div className="flex items-center gap-2 rounded-md px-2 py-2">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-muted text-xs font-semibold text-brand-foreground">
-          {initials(user.name)}
-        </div>
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-sm font-medium">{user.name}</p>
-          <p className="truncate text-[11px] text-ink-foreground/50">
-            {ROLE_LABEL[user.role] ?? user.role}
-          </p>
-        </div>
+        <Link href="/settings" className="flex min-w-0 flex-1 items-center gap-2 rounded-md hover:opacity-80">
+          {user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.avatarUrl}
+              alt={user.name}
+              className="size-8 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-muted text-xs font-semibold text-brand-foreground">
+              {initials(user.name)}
+            </div>
+          )}
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-medium">{user.name}</p>
+            <p className="truncate text-[11px] text-ink-foreground/50">
+              {ROLE_LABEL[user.role] ?? user.role}
+            </p>
+          </div>
+        </Link>
         <button
           type="button"
           onClick={handleSignOut}

@@ -2,6 +2,8 @@ import prisma from "@CMLP/db";
 import type { Context } from "hono";
 import { z } from "zod";
 
+import { isOcrEligible, runDocumentOcr } from "@/lib/ocr";
+import { paginationMeta, parsePagination } from "@/lib/pagination";
 import { buildStorageKey, getDownloadUrl, getUploadUrl, isR2Configured } from "@/lib/r2";
 
 const TRASH_RETENTION_DAYS = 30;
@@ -23,24 +25,41 @@ export async function listDocuments(c: Context) {
   const tagId = c.req.query("tagId");
   const status = c.req.query("status");
   const uploadedById = c.req.query("uploadedById");
+  const pagination = parsePagination(c);
 
-  const documents = await prisma.document.findMany({
-    where: {
-      deletedAt: null,
-      ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
-      ...(clientId ? { clientId } : {}),
-      ...(caseId ? { caseId } : {}),
-      ...(status ? { status: status as never } : {}),
-      ...(uploadedById ? { uploadedById } : {}),
-      ...(tagId ? { tags: { some: { tagId } } } : {}),
-    },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      client: { select: { id: true, name: true } },
-      case: { select: { id: true, title: true } },
-      uploadedBy: { select: { id: true, name: true } },
-    },
-  });
+  const where = {
+    deletedAt: null,
+    // Matches the document name or its OCR-extracted text, so scanned images are
+    // full-text searchable by their contents, not just their filename.
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { ocrText: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(clientId ? { clientId } : {}),
+    ...(caseId ? { caseId } : {}),
+    ...(status ? { status: status as never } : {}),
+    ...(uploadedById ? { uploadedById } : {}),
+    ...(tagId ? { tags: { some: { tagId } } } : {}),
+  };
+
+  const [documents, total] = await Promise.all([
+    prisma.document.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip: pagination.offset,
+      take: pagination.limit,
+      include: {
+        client: { select: { id: true, name: true } },
+        case: { select: { id: true, title: true } },
+        uploadedBy: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.document.count({ where }),
+  ]);
 
   return c.json({
     documents: documents.map((doc) => ({
@@ -53,7 +72,9 @@ export async function listDocuments(c: Context) {
       modified: relativeTime(doc.updatedAt),
       client: doc.client,
       case: doc.case,
+      ocrStatus: doc.ocrStatus,
     })),
+    pagination: paginationMeta(total, pagination),
   });
 }
 
@@ -101,6 +122,8 @@ export async function getDocument(c: Context) {
       tags: doc.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, colorClass: t.tag.colorClass })),
       hasStoredFile: Boolean(doc.storageKey),
       downloadUrl,
+      ocrStatus: doc.ocrStatus,
+      ocrText: doc.ocrText,
     },
   });
 }
@@ -173,6 +196,27 @@ export async function createDocument(c: Context) {
     },
   });
 
+  // Notify the case's lead attorney when someone else files a document into their case
+  // (respects their notifyOnCaseUpload preference).
+  if (doc.caseId) {
+    const matter = await prisma.case.findUnique({
+      where: { id: doc.caseId },
+      select: { title: true, leadAttorneyId: true, leadAttorney: { select: { notifyOnCaseUpload: true } } },
+    });
+    if (matter?.leadAttorneyId && matter.leadAttorneyId !== user.id && matter.leadAttorney?.notifyOnCaseUpload) {
+      await prisma.notification.create({
+        data: {
+          userId: matter.leadAttorneyId,
+          type: "CASE_UPLOAD",
+          title: "New document uploaded",
+          body: `${user.name} uploaded "${doc.name}" to ${matter.title}.`,
+          caseId: doc.caseId,
+          documentId: doc.id,
+        },
+      });
+    }
+  }
+
   // Real R2 upload path: reserve a storage key and hand back a presigned PUT URL the client
   // can push the actual file bytes to. Falls back to a metadata-only record (uploadUrl: null)
   // when R2 credentials aren't configured — see @/lib/r2.
@@ -184,6 +228,32 @@ export async function createDocument(c: Context) {
   }
 
   return c.json({ document: doc, uploadUrl }, 201);
+}
+
+// Called by the client once its PUT to the presigned R2 upload URL has actually succeeded
+// — that's the earliest point the server can be sure the bytes exist in storage, which is
+// what OCR needs to read. Kicks off OCR in the background for eligible file types (a plain
+// image); everything else is marked NOT_APPLICABLE and returns immediately.
+export async function confirmDocumentUpload(c: Context) {
+  const id = c.req.param("id");
+  const doc = await prisma.document.findUnique({ where: { id } });
+
+  if (!doc) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Document not found." } }, 404);
+  }
+
+  const eligible = Boolean(doc.storageKey) && isOcrEligible(doc.fileType);
+
+  const updated = await prisma.document.update({
+    where: { id },
+    data: { ocrStatus: eligible ? "PENDING" : "NOT_APPLICABLE" },
+  });
+
+  if (eligible) {
+    void runDocumentOcr(id);
+  }
+
+  return c.json({ document: updated });
 }
 
 const updateDocumentSchema = z.object({
@@ -254,15 +324,23 @@ export async function permanentlyDeleteDocument(c: Context) {
 }
 
 export async function listTrash(c: Context) {
-  const documents = await prisma.document.findMany({
-    where: { deletedAt: { not: null } },
-    orderBy: { deletedAt: "desc" },
-    include: {
-      client: { select: { id: true, name: true } },
-      case: { select: { id: true, title: true } },
-      deletedBy: { select: { name: true } },
-    },
-  });
+  const pagination = parsePagination(c);
+  const where = { deletedAt: { not: null } };
+
+  const [documents, total] = await Promise.all([
+    prisma.document.findMany({
+      where,
+      orderBy: { deletedAt: "desc" },
+      skip: pagination.offset,
+      take: pagination.limit,
+      include: {
+        client: { select: { id: true, name: true } },
+        case: { select: { id: true, title: true } },
+        deletedBy: { select: { name: true } },
+      },
+    }),
+    prisma.document.count({ where }),
+  ]);
 
   return c.json({
     documents: documents.map((doc) => {
@@ -278,6 +356,7 @@ export async function listTrash(c: Context) {
         purgesInDays: Math.max(0, TRASH_RETENTION_DAYS - daysElapsed),
       };
     }),
+    pagination: paginationMeta(total, pagination),
   });
 }
 

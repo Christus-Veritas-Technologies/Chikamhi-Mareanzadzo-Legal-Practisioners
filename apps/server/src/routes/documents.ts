@@ -2,6 +2,7 @@ import { Hono } from "hono";
 
 import {
   addDocumentTag,
+  confirmDocumentUpload,
   createDocument,
   deleteDocument,
   getDocument,
@@ -13,7 +14,7 @@ import {
   restoreDocument,
   updateDocument,
 } from "@/controllers/documents";
-import { requireAuth } from "@/middleware/auth";
+import { requireAuth, requireRole } from "@/middleware/auth";
 
 const documents = new Hono()
   .use("*", requireAuth)
@@ -21,7 +22,9 @@ const documents = new Hono()
   .post("/", createDocument)
   .get("/trash", listTrash)
   .post("/:id/restore", restoreDocument)
-  .delete("/:id/permanent", permanentlyDeleteDocument)
+  .post("/:id/confirm-upload", confirmDocumentUpload)
+  // Permanent delete is irreversible and bypasses the 30-day trash retention — admin-only.
+  .delete("/:id/permanent", requireRole("ADMIN"), permanentlyDeleteDocument)
   .get("/:id/history", getDocumentHistory)
   .get("/:id", getDocument)
   .patch("/:id", updateDocument)

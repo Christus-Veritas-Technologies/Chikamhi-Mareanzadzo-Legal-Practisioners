@@ -41,3 +41,13 @@ export async function getDownloadUrl(storageKey: string) {
   const command = new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: storageKey });
   return getSignedUrl(client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
 }
+
+// Fetches an object's raw bytes directly (no presigned round trip) — used server-side by
+// the OCR pipeline, which needs the actual file content rather than a client-facing URL.
+export async function getObjectBytes(storageKey: string): Promise<Uint8Array | null> {
+  if (!client) return null;
+  const command = new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: storageKey });
+  const result = await client.send(command);
+  if (!result.Body) return null;
+  return result.Body.transformToByteArray();
+}

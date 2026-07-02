@@ -97,6 +97,10 @@ export default function UploadPage() {
               body: item.file,
             });
             if (!putRes.ok) throw new Error("File upload to storage failed.");
+
+            // Tells the server the bytes have actually landed in R2 — that's what kicks off
+            // OCR for eligible file types. Best-effort: OCR just won't run if this fails.
+            await apiFetch(`/documents/${document.id}/confirm-upload`, { method: "POST" }).catch(() => {});
           }
 
           for (const tagId of item.tagIds) {
@@ -196,7 +200,7 @@ export default function UploadPage() {
                   {item.state === "done" ? (
                     <span className="flex items-center gap-1 text-xs text-success">
                       <CheckCircle2 className="size-3.5" />
-                      Uploaded · OCR done
+                      Uploaded
                     </span>
                   ) : item.state === "uploading" ? (
                     <span className="text-xs text-muted-foreground">Filing…</span>

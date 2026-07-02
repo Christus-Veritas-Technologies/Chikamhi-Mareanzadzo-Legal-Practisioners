@@ -80,7 +80,9 @@ export default function UploadPage() {
             method: "POST",
             body: JSON.stringify({
               name: item.name,
-              fileType: item.fileType,
+              // Recomputed from the (possibly user-edited) name rather than the fileType
+              // captured at drop time, so renaming the extension keeps this in sync.
+              fileType: extToFileType(item.name),
               clientId: item.clientId,
               caseId: item.caseId || undefined,
               contentType: item.file.type || undefined,
@@ -194,9 +196,15 @@ export default function UploadPage() {
               <div key={item.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                    {item.name}
-                  </p>
+                  {item.state === "ready" ? (
+                    <input
+                      value={item.name}
+                      onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium text-foreground hover:border-input focus:border-input focus:outline-none"
+                    />
+                  ) : (
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{item.name}</p>
+                  )}
                   {item.state === "done" ? (
                     <span className="flex items-center gap-1 text-xs text-success">
                       <CheckCircle2 className="size-3.5" />

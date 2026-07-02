@@ -234,8 +234,21 @@ export async function createDocument(c: Context) {
   let uploadUrl: string | null = null;
   if (isR2Configured) {
     const storageKey = buildStorageKey(doc.clientId, doc.id, doc.name);
+    console.log(
+      `[upload] document ${doc.id} "${doc.name}" — R2 configured, reserving storageKey="${storageKey}" contentType=${contentType ?? "(none)"} sizeBytes=${sizeBytes ?? "(none)"}`,
+    );
     await prisma.document.update({ where: { id: doc.id }, data: { storageKey } });
-    uploadUrl = await getUploadUrl(storageKey, contentType);
+    try {
+      uploadUrl = await getUploadUrl(storageKey, contentType);
+      console.log(
+        `[upload] document ${doc.id} — presigned PUT URL generated ok, host=${uploadUrl ? new URL(uploadUrl).host : "(null)"}`,
+      );
+    } catch (err) {
+      console.error(`[upload] document ${doc.id} — failed to generate presigned PUT URL:`, err);
+      uploadUrl = null;
+    }
+  } else {
+    console.log(`[upload] document ${doc.id} "${doc.name}" — R2 not configured, creating metadata-only record`);
   }
 
   return c.json({ document: doc, uploadUrl }, 201);
@@ -250,10 +263,14 @@ export async function confirmDocumentUpload(c: Context) {
   const doc = await prisma.document.findUnique({ where: { id } });
 
   if (!doc) {
+    console.error(`[upload] confirm-upload called for unknown document id=${id}`);
     return c.json({ error: { code: "NOT_FOUND", message: "Document not found." } }, 404);
   }
 
   const eligible = Boolean(doc.storageKey) && isOcrEligible(doc.fileType);
+  console.log(
+    `[upload] document ${id} — confirm-upload received, storageKey=${doc.storageKey ?? "(none)"} fileType=${doc.fileType} ocrEligible=${eligible}`,
+  );
 
   const updated = await prisma.document.update({
     where: { id },
@@ -261,6 +278,7 @@ export async function confirmDocumentUpload(c: Context) {
   });
 
   if (eligible) {
+    console.log(`[upload] document ${id} — queuing OCR`);
     void runDocumentOcr(id);
   }
 

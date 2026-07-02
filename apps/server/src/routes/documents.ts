@@ -18,7 +18,7 @@ import {
   signDocument,
   updateDocument,
 } from "@/controllers/documents";
-import { requireAuth, requireRole } from "@/middleware/auth";
+import { requireAuth } from "@/middleware/auth";
 
 const documents = new Hono()
   .use("*", requireAuth)
@@ -31,8 +31,10 @@ const documents = new Hono()
   .post("/:id/restore", restoreDocument)
   .post("/:id/confirm-upload", confirmDocumentUpload)
   .post("/:id/sign", signDocument)
-  // Permanent delete is irreversible and bypasses the 30-day trash retention — admin-only.
-  .delete("/:id/permanent", requireRole("ADMIN"), permanentlyDeleteDocument)
+  // Permanent delete is irreversible and bypasses the 30-day trash retention, but attorneys
+  // and paralegals have equal access to it — same as every other feature except the Audit
+  // Log and Users & Roles.
+  .delete("/:id/permanent", permanentlyDeleteDocument)
   .get("/:id/history", getDocumentHistory)
   .get("/:id", getDocument)
   .patch("/:id", updateDocument)

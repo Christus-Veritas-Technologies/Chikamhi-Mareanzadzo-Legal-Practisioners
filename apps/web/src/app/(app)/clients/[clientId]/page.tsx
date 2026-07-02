@@ -8,9 +8,12 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { StatusPill } from "@/components/status-pill";
-import { getCasesForClient, getClient } from "@/lib/mock-data";
+import { useApi } from "@/hooks/use-api";
+import { formatStatus } from "@/lib/format-status";
+import { relativeTime } from "@/lib/format-time";
 
 const TABS = [
   { value: "cases", label: "Cases" },
@@ -21,11 +24,44 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]["value"];
 
+type ClientDetail = {
+  id: string;
+  name: string;
+  type: string;
+  regNumber: string | null;
+  attorneyOfRecord: string;
+  clientSince: string;
+  documents: number;
+  storage: string;
+  cases: {
+    id: string;
+    caseNumber: string;
+    title: string;
+    status: string;
+    matterType: string;
+    location: string | null;
+    updatedAt: string;
+  }[];
+};
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+}
+
 export default function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [tab, setTab] = useState<Tab>("cases");
 
-  const client = getClient(clientId);
+  const { data, isLoading, error, refetch } = useApi<{ client: ClientDetail }>(`/clients/${clientId}`);
+  const client = data?.client;
+
+  if (isLoading) {
+    return <LoadingState label="Loading client…" />;
+  }
+
+  if (error && !error.toLowerCase().includes("not found")) {
+    return <InlineError message={error} onRetry={refetch} />;
+  }
 
   if (!client) {
     return (
@@ -42,7 +78,7 @@ export default function ClientDetailPage() {
     );
   }
 
-  const cases = getCasesForClient(client.id);
+  const cases = client.cases;
 
   return (
     <div className="flex flex-col gap-5">
@@ -56,7 +92,7 @@ export default function ClientDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-muted text-sm font-semibold text-brand-foreground">
-            {client.initials}
+            {initials(client.name)}
           </span>
           <div>
             <h1 className="font-serif text-xl font-semibold text-foreground">{client.name}</h1>
@@ -79,7 +115,7 @@ export default function ClientDetailPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent>
-            <p className="text-xl font-semibold text-foreground">{client.openCases}</p>
+            <p className="text-xl font-semibold text-foreground">{cases.length}</p>
             <p className="text-xs text-muted-foreground">Open cases</p>
           </CardContent>
         </Card>
@@ -115,7 +151,7 @@ export default function ClientDetailPage() {
                   <CardContent>
                     <div className="flex items-start justify-between">
                       <p className="text-[11px] text-muted-foreground">{c.caseNumber}</p>
-                      <StatusPill status={c.status} />
+                      <StatusPill status={formatStatus(c.status)} />
                     </div>
                     <p className="mt-1 text-sm font-semibold text-foreground">{c.title}</p>
                     <p className="text-xs text-muted-foreground">
@@ -123,8 +159,7 @@ export default function ClientDetailPage() {
                       {c.location ? ` · ${c.location}` : ""}
                     </p>
                     <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>{c.documentCount} documents</span>
-                      <span>Updated {c.updated}</span>
+                      <span>Updated {relativeTime(c.updatedAt)}</span>
                     </div>
                   </CardContent>
                 </Card>

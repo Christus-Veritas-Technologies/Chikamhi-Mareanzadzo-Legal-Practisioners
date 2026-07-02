@@ -7,18 +7,35 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-import { CLIENTS } from "@/lib/mock-data";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { useApi } from "@/hooks/use-api";
+import { relativeTime } from "@/lib/format-time";
 
-const TOTAL_OPEN_CASES = CLIENTS.reduce((sum, c) => sum + c.openCases, 0);
+type ClientRow = {
+  id: string;
+  name: string;
+  type: string;
+  openCases: number;
+  documents: number;
+  updatedAt: string;
+};
 
 export default function ClientsPage() {
   const [query, setQuery] = useState("");
+  const { data, isLoading, error, refetch } = useApi<{ clients: ClientRow[] }>("/clients");
+  const clients = data?.clients ?? [];
+
+  const totalOpenCases = clients.reduce((sum, c) => sum + c.openCases, 0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return CLIENTS;
-    return CLIENTS.filter((c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q));
-  }, [query]);
+    if (!q) return clients;
+    return clients.filter((c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q));
+  }, [clients, query]);
+
+  function initials(name: string) {
+    return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -26,7 +43,7 @@ export default function ClientsPage() {
         <div>
           <h1 className="font-serif text-2xl font-semibold text-foreground">Clients</h1>
           <p className="text-sm text-muted-foreground">
-            {CLIENTS.length} active clients · {TOTAL_OPEN_CASES} open cases
+            {clients.length} active clients · {totalOpenCases} open cases
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -56,11 +73,19 @@ export default function ClientsPage() {
       </div>
 
       <div className="overflow-hidden rounded-none border border-border bg-card">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <LoadingState label="Loading clients…" />
+        ) : error ? (
+          <InlineError message={error} onRetry={refetch} />
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="No clients found"
-            description={`Nothing matches "${query}". Try a different search, or add a new client.`}
+            title={clients.length === 0 ? "No clients yet" : "No clients found"}
+            description={
+              clients.length === 0
+                ? "Add your first client to get started."
+                : `Nothing matches "${query}". Try a different search, or add a new client.`
+            }
           />
         ) : (
           <div className="overflow-x-auto">
@@ -80,7 +105,7 @@ export default function ClientsPage() {
                     <td className="px-4 py-3">
                       <Link href={`/clients/${client.id}`} className="flex items-center gap-2.5">
                         <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-muted text-[10px] font-semibold text-brand-foreground">
-                          {client.initials}
+                          {initials(client.name)}
                         </span>
                         <span className="font-medium text-foreground hover:text-brand">
                           {client.name}
@@ -90,7 +115,7 @@ export default function ClientsPage() {
                     <td className="px-4 py-3 text-muted-foreground">{client.type}</td>
                     <td className="px-4 py-3 font-medium text-foreground">{client.openCases}</td>
                     <td className="px-4 py-3 text-muted-foreground">{client.documents}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{client.lastActivity}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{relativeTime(client.updatedAt)}</td>
                   </tr>
                 ))}
               </tbody>

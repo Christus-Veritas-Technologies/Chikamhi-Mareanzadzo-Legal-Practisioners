@@ -7,8 +7,9 @@ import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/api";
+import { assembleScanPdf } from "@/lib/pdf-assembly";
 import { clearPages, getPages } from "@/lib/scan-session";
+import { enqueueUpload, processQueue } from "@/lib/upload-queue";
 
 type ClientOption = { id: string; name: string };
 type CaseOption = { id: string; title: string; caseNumber: string; client: { id: string } };
@@ -21,7 +22,7 @@ export default function ScanAssignScreen() {
   const [filename, setFilename] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "combining" | "queuing">("idle");
 
   const { data: clientsData, isLoading: clientsLoading, error: clientsError, refetch: refetchClients } =
     useApi<{ clients: ClientOption[] }>("/clients");
@@ -37,49 +38,51 @@ export default function ScanAssignScreen() {
   const canConfirm = Boolean(clientId && caseId && filename.trim() && !isSubmitting && pages.length > 0);
 
   async function confirm() {
-    if (!clientId || !caseId || !filename.trim() || !token || pages.length === 0) return;
+    if (!clientId || !caseId || !filename.trim() || pages.length === 0) return;
     setIsSubmitting(true);
     setSubmitError(null);
-    setProgress(0);
 
     const baseName = filename.trim().replace(/\.[^/.]+$/, "");
-    const filedNames: string[] = [];
 
     try {
-      for (let i = 0; i < pages.length; i++) {
-        const uri = pages[i];
-        const name = pages.length > 1 ? `${baseName} (page ${i + 1} of ${pages.length}).jpg` : `${baseName}.jpg`;
+      // Multi-page scans are combined client-side into a single multi-page PDF (via
+      // pdf-lib) instead of filing each page as its own "(page N of M)" JPEG.
+      const isMultiPage = pages.length > 1;
+      let sourceUri: string;
+      let name: string;
+      let fileType: string;
+      let contentType: string;
+      let sizeBytes: number | undefined;
 
-        const { document, uploadUrl } = await apiFetch<{
-          document: { id: string };
-          uploadUrl: string | null;
-        }>("/documents", {
-          method: "POST",
-          body: { name, fileType: "jpg", clientId, caseId, contentType: "image/jpeg" },
-          token,
-        });
-
-        if (uploadUrl) {
-          const blob = await (await fetch(uri)).blob();
-          const putRes = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": "image/jpeg" },
-            body: blob,
-          });
-          if (!putRes.ok) throw new Error(`Couldn't upload page ${i + 1} to storage.`);
-        }
-
-        filedNames.push(name);
-        setProgress(i + 1);
-        void document;
+      if (isMultiPage) {
+        setPhase("combining");
+        const pdf = await assembleScanPdf(pages);
+        sourceUri = pdf.uri;
+        sizeBytes = pdf.sizeBytes;
+        name = `${baseName}.pdf`;
+        fileType = "pdf";
+        contentType = "application/pdf";
+      } else {
+        sourceUri = pages[0];
+        name = `${baseName}.jpg`;
+        fileType = "jpg";
+        contentType = "image/jpeg";
       }
 
+      // Files into the persistent, offline-friendly upload queue instead of uploading
+      // inline — the file is copied to durable app storage immediately, then the queue
+      // screen (and expo-network reconnect listener) drives the actual upload attempts.
+      setPhase("queuing");
+      await enqueueUpload({ name, clientId, caseId, fileType, contentType, sizeBytes, sourceUri });
+
       clearPages();
-      router.replace({ pathname: "/upload-queue", params: { justAdded: filedNames.join("|") } });
+      void processQueue(token); // kick off an attempt now; no-op if offline
+      router.replace({ pathname: "/upload-queue" });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Couldn't file this scan.");
     } finally {
       setIsSubmitting(false);
+      setPhase("idle");
     }
   }
 
@@ -173,7 +176,7 @@ export default function ScanAssignScreen() {
         <Text
           className={`text-sm font-semibold ${canConfirm ? "text-primary-foreground" : "text-muted-foreground"}`}
         >
-          {isSubmitting ? `Filing ${progress}/${pages.length}…` : "Confirm & upload"}
+          {phase === "combining" ? "Combining pages…" : phase === "queuing" ? "Filing…" : "Confirm & upload"}
         </Text>
       </Pressable>
     </ScrollView>

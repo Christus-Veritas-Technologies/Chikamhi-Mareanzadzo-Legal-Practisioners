@@ -1,77 +1,102 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { Stack } from "expo-router";
+import * as Network from "expo-network";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { RouteError } from "@/components/route-error";
-
-type QueueItem = {
-  id: string;
-  name: string;
-  state: "uploading" | "done" | "failed";
-  progress: number;
-};
+import { useAuth } from "@/contexts/auth-context";
+import { listQueue, processQueue, retryEntry, type QueuedUpload } from "@/lib/upload-queue";
 
 export default function UploadQueueScreen() {
-  const { justAdded } = useLocalSearchParams<{ justAdded?: string }>();
+  const { token } = useAuth();
+  const [queue, setQueue] = useState<QueuedUpload[]>(() => listQueue());
+  const [isOffline, setIsOffline] = useState(false);
 
-  // scan-assign.tsx only navigates here after its POST /documents calls already succeeded,
-  // so anything arriving via justAdded is already filed — no fake in-progress state to fake.
-  // Multiple filed pages arrive pipe-delimited (one document per captured page).
-  const [queue, setQueue] = useState<QueueItem[]>(() => {
-    if (!justAdded) return [];
-    return justAdded
-      .split("|")
-      .filter(Boolean)
-      .map((name, i) => ({ id: `u${i}`, name, state: "done" as const, progress: 100 }));
-  });
+  function refresh() {
+    setQueue(listQueue());
+  }
+
+  useEffect(() => {
+    refresh();
+    processQueue(token).then(refresh);
+
+    Network.getNetworkStateAsync().then((state) => setIsOffline(state.isConnected === false));
+
+    // Auto-retry the whole queue the moment connectivity comes back, so a scan captured
+    // offline files itself without the user having to remember to come back and tap retry.
+    const subscription = Network.addNetworkStateListener((state) => {
+      setIsOffline(state.isConnected === false);
+      if (state.isConnected) {
+        processQueue(token).then(refresh);
+      }
+    });
+
+    // Lightweight poll while this screen is open so "uploading" -> "done"/"failed"
+    // transitions happening inside processQueue are reflected without extra plumbing.
+    const interval = setInterval(refresh, 1200);
+
+    return () => {
+      subscription.remove();
+      clearInterval(interval);
+    };
+  }, [token]);
 
   function retry(id: string) {
-    setQueue((q) => q.map((i) => (i.id === id ? { ...i, state: "uploading", progress: 0 } : i)));
+    retryEntry(id);
+    refresh();
+    void processQueue(token).then(refresh);
   }
 
   return (
     <Container className="px-5 pt-3">
       <Stack.Screen options={{ title: "Upload queue" }} />
 
+      {isOffline ? (
+        <View className="flex-row items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5">
+          <Ionicons name="cloud-offline-outline" size={16} color="#B08A3E" />
+          <Text className="flex-1 text-xs text-foreground">
+            You're offline — queued scans will upload automatically once you're back online.
+          </Text>
+        </View>
+      ) : null}
+
       {queue.length === 0 ? (
-        <EmptyState icon="cloud-upload-outline" title="Nothing queued" description="Scans you capture will show up here while they upload." />
+        <EmptyState
+          icon="cloud-upload-outline"
+          title="Nothing queued"
+          description="Scans you capture will show up here while they upload."
+        />
       ) : (
-        <View className="gap-2 pb-6">
+        <View className="mt-3 gap-2 pb-6">
           {queue.map((item) => (
             <View key={item.id} className="rounded-xl border border-border p-3">
               <View className="flex-row items-center gap-2">
                 <Ionicons
                   name={
-                    item.state === "done"
-                      ? "checkmark-circle"
-                      : item.state === "failed"
+                    item.status === "uploading"
+                      ? "cloud-upload-outline"
+                      : item.status === "failed"
                         ? "alert-circle"
-                        : "cloud-upload-outline"
+                        : "time-outline"
                   }
                   size={16}
-                  color={item.state === "done" ? "#3E8F5C" : item.state === "failed" ? "#B3413A" : "#8A8378"}
+                  color={item.status === "failed" ? "#B3413A" : "#8A8378"}
                 />
                 <Text numberOfLines={1} className="flex-1 text-sm font-medium text-foreground">
                   {item.name}
                 </Text>
-                {item.state === "uploading" ? (
-                  <Text className="text-xs text-muted-foreground">{item.progress}%</Text>
-                ) : null}
+                <Text className="text-xs text-muted-foreground">
+                  {item.status === "uploading" ? "Uploading…" : item.status === "failed" ? "Failed" : "Queued"}
+                </Text>
               </View>
 
-              {item.state === "uploading" ? (
-                <View className="mt-2 h-1 overflow-hidden rounded-full bg-muted/20">
-                  <View className="h-full rounded-full bg-brand" style={{ width: `${item.progress}%` }} />
-                </View>
-              ) : null}
-
-              {item.state === "failed" ? (
+              {item.status === "failed" ? (
                 <View className="mt-2 flex-row items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2">
                   <Text className="flex-1 text-xs text-destructive">
-                    Network interrupted — not saved to R2.
+                    {item.error ?? "Upload failed."}
                   </Text>
                   <Pressable onPress={() => retry(item.id)}>
                     <Text className="text-xs font-semibold text-brand">Retry</Text>

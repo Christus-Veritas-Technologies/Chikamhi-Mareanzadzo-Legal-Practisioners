@@ -4,31 +4,49 @@ import { FolderPlus, Pencil, Plus, Tags as TagsIcon } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-import { FOLDERS, TAGS, type Folder, type Tag } from "@/lib/folders-tags-data";
+import { InlineError, LoadingState } from "@/components/loading-state";
+import { apiFetch, useApi } from "@/hooks/use-api";
+
+type Folder = { id: string; name: string; documentCount: number };
+type Tag = { id: string; name: string; colorClass: string; documentCount: number };
 
 export default function FoldersTagsPage() {
-  const [folders, setFolders] = useState<Folder[]>(FOLDERS);
-  const [tags, setTags] = useState<Tag[]>(TAGS);
+  const { data: foldersData, isLoading: foldersLoading, error: foldersError, refetch: refetchFolders } =
+    useApi<{ folders: Folder[] }>("/folders");
+  const { data: tagsData, isLoading: tagsLoading, error: tagsError, refetch: refetchTags } =
+    useApi<{ tags: Tag[] }>("/tags");
+
+  const folders = foldersData?.folders ?? [];
+  const tags = tagsData?.tags ?? [];
+
   const [newFolderName, setNewFolderName] = useState("");
   const [addingFolder, setAddingFolder] = useState(false);
+  const [isSavingFolder, setIsSavingFolder] = useState(false);
+  const [isSavingTag, setIsSavingTag] = useState(false);
 
   const totalDocs = folders.reduce((sum, f) => sum + f.documentCount, 0);
 
-  function addFolder() {
+  async function addFolder() {
     if (!newFolderName.trim()) return;
-    setFolders((f) => [
-      ...f,
-      { id: newFolderName.toLowerCase().replace(/\s+/g, "-"), name: newFolderName, documentCount: 0 },
-    ]);
-    setNewFolderName("");
-    setAddingFolder(false);
+    setIsSavingFolder(true);
+    try {
+      await apiFetch("/folders", { method: "POST", body: JSON.stringify({ name: newFolderName.trim() }) });
+      setNewFolderName("");
+      setAddingFolder(false);
+      refetchFolders();
+    } finally {
+      setIsSavingFolder(false);
+    }
   }
 
-  function addTag() {
-    setTags((t) => [
-      ...t,
-      { id: `tag-${t.length + 1}`, name: "New tag", documentCount: 0, colorClass: "bg-muted-foreground" },
-    ]);
+  async function addTag() {
+    setIsSavingTag(true);
+    try {
+      await apiFetch("/tags", { method: "POST", body: JSON.stringify({ name: "New tag" }) });
+      refetchTags();
+    } finally {
+      setIsSavingTag(false);
+    }
   }
 
   return (
@@ -48,8 +66,25 @@ export default function FoldersTagsPage() {
           </p>
         </div>
 
-        {folders.length === 0 ? (
-          <EmptyState icon={FolderPlus} title="No folders yet" description="Create your first folder to start organizing documents." />
+        {foldersLoading ? (
+          <LoadingState label="Loading folders…" />
+        ) : foldersError ? (
+          <InlineError message={foldersError} onRetry={refetchFolders} />
+        ) : folders.length === 0 && !addingFolder ? (
+          <EmptyState
+            icon={FolderPlus}
+            title="No folders yet"
+            description="Create your first folder to start organizing documents."
+            action={
+              <button
+                type="button"
+                onClick={() => setAddingFolder(true)}
+                className="text-xs font-medium text-brand hover:underline"
+              >
+                New folder
+              </button>
+            }
+          />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {folders.map((folder) => (
@@ -73,9 +108,10 @@ export default function FoldersTagsPage() {
                 <button
                   type="button"
                   onClick={addFolder}
-                  className="text-xs font-medium text-brand hover:underline"
+                  disabled={isSavingFolder}
+                  className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
                 >
-                  Add folder
+                  {isSavingFolder ? "Adding…" : "Add folder"}
                 </button>
               </div>
             ) : (
@@ -95,13 +131,26 @@ export default function FoldersTagsPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">Tags</h2>
-          <button type="button" onClick={addTag} className="text-xs font-medium text-brand hover:underline">
-            + New tag
+          <button
+            type="button"
+            onClick={addTag}
+            disabled={isSavingTag}
+            className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
+          >
+            {isSavingTag ? "Adding…" : "+ New tag"}
           </button>
         </div>
 
-        {tags.length === 0 ? (
-          <EmptyState icon={TagsIcon} title="No tags yet" description="Tags help you find documents across clients and cases." />
+        {tagsLoading ? (
+          <LoadingState label="Loading tags…" />
+        ) : tagsError ? (
+          <InlineError message={tagsError} onRetry={refetchTags} />
+        ) : tags.length === 0 ? (
+          <EmptyState
+            icon={TagsIcon}
+            title="No tags yet"
+            description="Tags help you find documents across clients and cases."
+          />
         ) : (
           <div className="overflow-hidden rounded-none border border-border bg-card">
             {tags.map((tag, i) => (

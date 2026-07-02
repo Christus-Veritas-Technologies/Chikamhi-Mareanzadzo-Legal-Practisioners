@@ -38,6 +38,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "14cba22e-aa89-4a8e-9811-358c0ad658c5"
+      }
+    },
+    "android": {
+      "package": "com.chikamhimareanadzolegalpractitioners.legalmanagementsystem"
     }
   }
 }

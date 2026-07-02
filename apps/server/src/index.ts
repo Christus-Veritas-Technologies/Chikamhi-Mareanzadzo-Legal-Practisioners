@@ -8,6 +8,7 @@ import auth from "@/routes/auth";
 import cases from "@/routes/cases";
 import clients from "@/routes/clients";
 import dashboard from "@/routes/dashboard";
+import deadlines from "@/routes/deadlines";
 import documents from "@/routes/documents";
 import folders from "@/routes/folders";
 import notifications from "@/routes/notifications";
@@ -41,5 +42,6 @@ app.route("/tags", tags);
 app.route("/audit-log", audit);
 app.route("/users", users);
 app.route("/notifications", notifications);
+app.route("/deadlines", deadlines);
 
 export default app;

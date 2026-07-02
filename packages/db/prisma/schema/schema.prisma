@@ -15,6 +15,39 @@ enum StaffRole {
   PARALEGAL
 }
 
+enum ClientType {
+  CORPORATE
+  DECEASED_ESTATE
+  FAMILY
+  GOVERNMENT
+}
+
+enum CaseStatus {
+  ACTIVE
+  UNDER_REVIEW
+  CLOSED
+}
+
+enum DocumentStatus {
+  DRAFT
+  UNDER_REVIEW
+  FILED
+  SIGNED
+  EXECUTED
+}
+
+enum AuditAction {
+  VIEWED
+  UPLOADED
+  SIGNED
+  FILED
+  MOVED
+  DELETED
+  RESTORED
+  OCR_COMPLETED
+  CASE_OPENED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -28,5 +61,136 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  clientsAsAttorney Client[]        @relation("ClientAttorneyOfRecord")
+  casesAsLead       Case[]          @relation("CaseLeadAttorney")
+  documentsUploaded Document[]      @relation("DocumentUploadedBy")
+  auditEntries      AuditLogEntry[] @relation("AuditActor")
+
   @@map("users")
+}
+
+model Client {
+  id                 String     @id @default(cuid())
+  name               String
+  type               ClientType
+  regNumber          String?
+  attorneyOfRecordId String?
+  attorneyOfRecord   User?      @relation("ClientAttorneyOfRecord", fields: [attorneyOfRecordId], references: [id])
+  clientSince        DateTime   @default(now())
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  cases     Case[]
+  documents Document[]
+  contacts  Contact[]
+
+  @@map("clients")
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+
+  @@map("contacts")
+}
+
+model Case {
+  id             String     @id @default(cuid())
+  caseNumber     String     @unique
+  title          String
+  clientId       String
+  client         Client     @relation(fields: [clientId], references: [id])
+  status         CaseStatus @default(ACTIVE)
+  matterType     String
+  location       String?
+  leadAttorneyId String?
+  leadAttorney   User?      @relation("CaseLeadAttorney", fields: [leadAttorneyId], references: [id])
+  registry       String?
+  openedAt       DateTime   @default(now())
+  closedAt       DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  documents    Document[]
+  auditEntries AuditLogEntry[]
+
+  @@map("cases")
+}
+
+model Folder {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  documents Document[]
+
+  @@map("folders")
+}
+
+model Tag {
+  id         String        @id @default(cuid())
+  name       String        @unique
+  colorClass String        @default("bg-muted-foreground")
+  createdAt  DateTime      @default(now())
+  documents  DocumentTag[]
+
+  @@map("tags")
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  name         String
+  fileType     String
+  status       DocumentStatus @default(DRAFT)
+  storageKey   String? // Cloudflare R2 object key — nullable until real upload is wired
+  sizeBytes    Int?
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id])
+  caseId       String?
+  case         Case?          @relation(fields: [caseId], references: [id])
+  folderId     String?
+  folder       Folder?        @relation(fields: [folderId], references: [id])
+  uploadedById String
+  uploadedBy   User           @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+  deletedAt    DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  tags         DocumentTag[]
+  auditEntries AuditLogEntry[]
+
+  @@map("documents")
+}
+
+model DocumentTag {
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+  @@map("document_tags")
+}
+
+// Doubles as both the firm-wide Audit Log and each Case's activity timeline
+// (the timeline is just this table filtered by caseId).
+model AuditLogEntry {
+  id          String      @id @default(cuid())
+  actorId     String?
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id])
+  action      AuditAction
+  targetLabel String
+  documentId  String?
+  document    Document?   @relation(fields: [documentId], references: [id])
+  caseId      String?
+  case        Case?       @relation(fields: [caseId], references: [id])
+  sourceIp    String?
+  createdAt   DateTime    @default(now())
+
+  @@map("audit_log_entries")
 }

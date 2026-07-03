@@ -25,6 +25,46 @@ export async function listFolders(c: Context) {
   });
 }
 
+export async function getFolder(c: Context) {
+  const id = c.req.param("id");
+
+  const folder = await prisma.folder.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      tags: { include: { tag: true } },
+      documents: {
+        where: { deletedAt: null },
+        orderBy: { updatedAt: "desc" },
+        include: {
+          client: { select: { id: true, name: true } },
+          case: { select: { id: true, title: true } },
+        },
+      },
+    },
+  });
+
+  if (!folder) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Folder not found." } }, 404);
+  }
+
+  return c.json({
+    folder: {
+      id: folder.id,
+      name: folder.name,
+      createdAt: folder.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      tags: folder.tags.map((ft) => ({ id: ft.tag.id, name: ft.tag.name, colorClass: ft.tag.colorClass })),
+      documents: folder.documents.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        status: doc.status,
+        modified: doc.updatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        client: doc.client,
+        case: doc.case,
+      })),
+    },
+  });
+}
+
 const createFolderSchema = z.object({
   name: z.string().min(1),
   tagIds: z.array(z.string().min(1)).optional(),

@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderPlus, Pencil, Tags as TagsIcon, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -117,7 +118,11 @@ export default function FoldersTagsPage() {
                   <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
                 </button>
                 <FolderPlus className="size-4 text-brand" />
-                <p className="mt-2 pr-4 text-sm font-medium text-foreground">{folder.name}</p>
+                <Link href={`/folders/${folder.id}`} className="block">
+                  <p className="mt-2 pr-4 text-sm font-medium text-foreground hover:text-brand hover:underline">
+                    {folder.name}
+                  </p>
+                </Link>
                 <p className="text-xs text-muted-foreground">{folder.documentCount} documents</p>
                 {folder.tags.length > 0 ? (
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -180,7 +185,9 @@ export default function FoldersTagsPage() {
                     className="w-20 rounded border border-input bg-background px-1 text-xs text-foreground"
                   />
                 ) : (
-                  <span className="text-foreground">{tag.name}</span>
+                  <Link href={`/tags/${tag.id}`} className="text-foreground hover:text-brand hover:underline">
+                    {tag.name}
+                  </Link>
                 )}
                 <span className="text-muted-foreground">· {tag.documentCount}</span>
                 <button type="button" onClick={() => startEditingTag(tag)} aria-label={`Rename ${tag.name}`} className="ml-0.5">

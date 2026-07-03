@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import {
   createFolder,
   deleteFolder,
+  getFolder,
   listFolders,
   listFolderTrash,
   permanentlyDeleteFolder,
@@ -19,6 +20,7 @@ const folders = new Hono()
   .get("/", listFolders)
   .post("/", createFolder)
   .get("/trash", listFolderTrash)
+  .get("/:id", getFolder)
   .post("/:id/restore", restoreFolder)
   .delete("/:id/permanent", permanentlyDeleteFolder)
   .patch("/:id", updateFolder)

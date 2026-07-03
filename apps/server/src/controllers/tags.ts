@@ -22,6 +22,61 @@ export async function listTags(c: Context) {
   });
 }
 
+export async function getTag(c: Context) {
+  const id = c.req.param("id");
+
+  const tag = await prisma.tag.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      documents: {
+        where: { document: { deletedAt: null } },
+        orderBy: { document: { updatedAt: "desc" } },
+        include: {
+          document: {
+            include: {
+              client: { select: { id: true, name: true } },
+              case: { select: { id: true, title: true } },
+            },
+          },
+        },
+      },
+      folders: {
+        where: { folder: { deletedAt: null } },
+        orderBy: { folder: { name: "asc" } },
+        include: {
+          folder: { include: { _count: { select: { documents: { where: { deletedAt: null } } } } } },
+        },
+      },
+    },
+  });
+
+  if (!tag) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Tag not found." } }, 404);
+  }
+
+  return c.json({
+    tag: {
+      id: tag.id,
+      name: tag.name,
+      colorClass: tag.colorClass,
+      createdAt: tag.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      documents: tag.documents.map((dt) => ({
+        id: dt.document.id,
+        name: dt.document.name,
+        status: dt.document.status,
+        modified: dt.document.updatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        client: dt.document.client,
+        case: dt.document.case,
+      })),
+      folders: tag.folders.map((ft) => ({
+        id: ft.folder.id,
+        name: ft.folder.name,
+        documentCount: ft.folder._count.documents,
+      })),
+    },
+  });
+}
+
 const createTagSchema = z.object({
   name: z.string().min(1),
   colorClass: z.string().optional(),

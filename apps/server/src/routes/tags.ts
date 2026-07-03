@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import {
   createTag,
   deleteTag,
+  getTag,
   listTags,
   listTagTrash,
   permanentlyDeleteTag,
@@ -17,6 +18,7 @@ const tags = new Hono()
   .get("/", listTags)
   .post("/", createTag)
   .get("/trash", listTagTrash)
+  .get("/:id", getTag)
   .post("/:id/restore", restoreTag)
   .delete("/:id/permanent", permanentlyDeleteTag)
   .patch("/:id", updateTag)

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useThemeColor } from "heroui-native";
 
+import { CaseFormDialog } from "@/components/case-form-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
@@ -37,6 +38,7 @@ type CaseRow = {
 
 export default function CasesScreen() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [newCaseOpen, setNewCaseOpen] = useState(false);
   const foreground = useThemeColor("foreground");
   const { open } = useAppDrawer();
 
@@ -64,9 +66,14 @@ export default function CasesScreen() {
             {counts.all} cases · {counts.ACTIVE} active
           </Text>
         </View>
-        <Pressable hitSlop={8} onPress={open}>
-          <Ionicons name="menu" size={22} color={foreground} />
-        </Pressable>
+        <View className="flex-row items-center gap-4">
+          <Pressable hitSlop={8} onPress={() => setNewCaseOpen(true)}>
+            <Ionicons name="add" size={22} color={foreground} />
+          </Pressable>
+          <Pressable hitSlop={8} onPress={open}>
+            <Ionicons name="menu" size={22} color={foreground} />
+          </Pressable>
+        </View>
       </View>
 
       <View className="mt-3">
@@ -84,7 +91,7 @@ export default function CasesScreen() {
               icon="briefcase-outline"
               title="No cases here"
               description={
-                statusFilter === "all" ? "Open a case from a client to get started." : "Nothing matches this status."
+                statusFilter === "all" ? "Tap + above to open your first case." : "Nothing matches this status."
               }
             />
           ) : (
@@ -108,6 +115,15 @@ export default function CasesScreen() {
           )}
         </View>
       )}
+
+      <CaseFormDialog
+        visible={newCaseOpen}
+        onOpenChange={setNewCaseOpen}
+        onCreated={() => {
+          setNewCaseOpen(false);
+          refetch();
+        }}
+      />
     </Container>
   );
 }

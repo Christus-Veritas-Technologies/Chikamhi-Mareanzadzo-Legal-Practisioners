@@ -18,10 +18,14 @@ import { toast } from "sonner";
 import { apiFetch, useApi } from "@/hooks/use-api";
 
 type UserOption = { id: string; name: string };
+type ClientOption = { id: string; name: string };
 
 type CaseFormDialogProps = {
   trigger: React.ReactNode;
-  clientId: string;
+  // If a clientId is provided (e.g. from a client's own detail page), the client is fixed
+  // and no picker is shown. If omitted (e.g. from the top-level Cases list), the user picks
+  // a client from a dropdown.
+  clientId?: string;
   onSaved: () => void;
 };
 
@@ -32,20 +36,27 @@ export function CaseFormDialog({ trigger, clientId, onSaved }: CaseFormDialogPro
   const [location, setLocation] = useState("");
   const [registry, setRegistry] = useState("");
   const [leadAttorneyId, setLeadAttorneyId] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const { data: usersData } = useApi<{ users: UserOption[] }>(open ? "/users" : null);
   const users = usersData?.users ?? [];
 
+  const needsClientPicker = !clientId;
+  const { data: clientsData } = useApi<{ clients: ClientOption[] }>(open && needsClientPicker ? "/clients" : null);
+  const clients = clientsData?.clients ?? [];
+
+  const resolvedClientId = clientId ?? selectedClientId;
+
   async function save() {
-    if (!title.trim() || !matterType.trim()) return;
+    if (!title.trim() || !matterType.trim() || !resolvedClientId) return;
     setIsSaving(true);
     try {
       await apiFetch("/cases", {
         method: "POST",
         body: JSON.stringify({
           title: title.trim(),
-          clientId,
+          clientId: resolvedClientId,
           matterType: matterType.trim(),
           location: location.trim() || undefined,
           registry: registry.trim() || undefined,
@@ -59,6 +70,7 @@ export function CaseFormDialog({ trigger, clientId, onSaved }: CaseFormDialogPro
       setLocation("");
       setRegistry("");
       setLeadAttorneyId("");
+      setSelectedClientId("");
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't create case.");
@@ -73,10 +85,30 @@ export function CaseFormDialog({ trigger, clientId, onSaved }: CaseFormDialogPro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New case</DialogTitle>
-          <DialogDescription>Open a new case for this client.</DialogDescription>
+          <DialogDescription>
+            {needsClientPicker ? "Pick a client and open a new case." : "Open a new case for this client."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          {needsClientPicker ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="case-client">Client</Label>
+              <select
+                id="case-client"
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="py-2 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">Select a client…</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="case-title">Title</Label>
             <Input id="case-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Stand 4471 — Transfer" />
@@ -115,7 +147,7 @@ export function CaseFormDialog({ trigger, clientId, onSaved }: CaseFormDialogPro
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={isSaving || !title.trim() || !matterType.trim()}>
+          <Button onClick={save} disabled={isSaving || !title.trim() || !matterType.trim() || !resolvedClientId}>
             {isSaving ? "Creating…" : "Create case"}
           </Button>
         </DialogFooter>

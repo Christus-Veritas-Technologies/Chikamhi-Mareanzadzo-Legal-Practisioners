@@ -1,10 +1,12 @@
 "use client";
 
+import { Button } from "@CMLP/ui/components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
 import { FolderTree, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { CaseFormDialog } from "@/components/case-form-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
@@ -64,17 +66,20 @@ export default function CasesPage() {
           <h1 className="font-serif text-2xl font-semibold text-foreground">Cases</h1>
           <p className="text-sm text-muted-foreground">{cases.length} cases across all clients</p>
         </div>
-        <div className="w-56">
-          <InputGroup>
-            <InputGroupAddon>
-              <Search />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder="Search cases…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </InputGroup>
+        <div className="flex items-center gap-2">
+          <div className="w-56">
+            <InputGroup>
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Search cases…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </InputGroup>
+          </div>
+          <CaseFormDialog onSaved={refetch} trigger={<Button>New case</Button>} />
         </div>
       </div>
 

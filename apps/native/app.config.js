@@ -13,7 +13,7 @@ const isProductionBuild = process.env.APK_SIZE_OPTIMIZED === "1";
 // will strip the classes/methods they need unless pinned down explicitly.
 // Package names below match this project's actual native dependencies
 // (react-native-reanimated, gesture-handler, screens, svg,
-// keyboard-controller), not a generic guess.
+// keyboard-controller, safe-area-context), not a generic guess.
 const extraProguardRules = `
 # React Native / Hermes / New Architecture core
 -keep class com.facebook.hermes.unicode.** { *; }
@@ -43,6 +43,12 @@ const extraProguardRules = `
 
 # Keyboard controller
 -keep class com.reactnativekeyboardcontroller.** { *; }
+
+# Safe area context — used by components/container.tsx, which wraps nearly every
+# screen in the app. Omitting this was the likely cause of the "works in dev, crashes
+# immediately on launch in production" bug: R8 only strips in release builds, and this
+# module's JNI bridge is invoked on first render of almost any screen.
+-keep class com.th3rdwave.safeareacontext.** { *; }
 `;
 
 module.exports = {

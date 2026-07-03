@@ -92,6 +92,13 @@ module.exports = {
         "expo-build-properties",
         {
           android: {
+            // Release builds block plain-HTTP traffic by default (Android 9+ Network
+            // Security Config); dev/dev-client builds are exempt, which is why this only
+            // bites in production. EXPO_PUBLIC_SERVER_URL currently points at a local
+            // http:// LAN address, not https://, so this is required for any production
+            // build to reach the server at all. Applies to every profile (matches
+            // vva/apps/reception, which sets this the same way for the same reason).
+            usesCleartextTraffic: true,
             ...(isProductionBuild
               ? {
                   // Real phones are always arm; x86/x86_64 only exist for
@@ -103,9 +110,18 @@ module.exports = {
                   // start, which makes the .apk file itself bigger — worth
                   // trading away for a distributable file.
                   useLegacyPackaging: true,
-                  // R8 code shrinking + unused-resource removal.
-                  enableMinifyInReleaseBuilds: true,
-                  enableShrinkResourcesInReleaseBuilds: true,
+                  // TEMPORARILY OFF as a diagnostic: the production build is crashing on
+                  // launch on a physical device even with the safe-area-context keep rule
+                  // added, which means R8 is very likely still stripping something else.
+                  // Rather than guess proguard rules one at a time through slow production
+                  // builds, minification (and shrinkResources, which AGP requires to be
+                  // off when minify is off) is disabled here so the next build tells us
+                  // definitively whether R8 is the cause at all. If that build launches
+                  // fine, flip these back to true and we chase down the remaining stripped
+                  // class with an adb logcat from a minified build. If it STILL crashes
+                  // with minify off, the cause is unrelated to R8 entirely.
+                  enableMinifyInReleaseBuilds: false,
+                  enableShrinkResourcesInReleaseBuilds: false,
                   // Compresses the JS bundle inside the APK too. Slightly
                   // slower cold start in exchange for a smaller file.
                   enableBundleCompression: true,

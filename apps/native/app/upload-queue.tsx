@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as Network from "expo-network";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -68,6 +68,24 @@ export default function UploadQueueScreen() {
           icon="cloud-upload-outline"
           title="Nothing queued"
           description="Scans you capture will show up here while they upload."
+          action={
+            <View className="mt-1 flex-row gap-2">
+              <Pressable
+                onPress={() => router.replace("/scan")}
+                className="flex-row items-center gap-1.5 rounded-full bg-primary px-4 py-2"
+              >
+                <Ionicons name="scan-outline" size={14} color="#F5F0E6" />
+                <Text className="text-xs font-semibold text-primary-foreground">Upload another</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace("/")}
+                className="flex-row items-center gap-1.5 rounded-full border border-border px-4 py-2"
+              >
+                <Ionicons name="home-outline" size={14} color="#211D17" />
+                <Text className="text-xs font-semibold text-foreground">Home</Text>
+              </Pressable>
+            </View>
+          }
         />
       ) : (
         <View className="mt-3 gap-2 pb-6">
@@ -105,6 +123,23 @@ export default function UploadQueueScreen() {
               ) : null}
             </View>
           ))}
+
+          <View className="mt-2 flex-row gap-2">
+            <Pressable
+              onPress={() => router.replace("/scan")}
+              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2.5"
+            >
+              <Ionicons name="scan-outline" size={14} color="#F5F0E6" />
+              <Text className="text-xs font-semibold text-primary-foreground">Upload another</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.replace("/")}
+              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-full border border-border px-4 py-2.5"
+            >
+              <Ionicons name="home-outline" size={14} color="#211D17" />
+              <Text className="text-xs font-semibold text-foreground">Home</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </Container>

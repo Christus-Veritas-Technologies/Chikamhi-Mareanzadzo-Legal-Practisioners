@@ -148,11 +148,6 @@ export default function SignInScreen() {
           <Button.Label>{isSigningIn ? "Signing in…" : "Sign in"}</Button.Label>
         </Button>
 
-        <Pressable className="mt-5 flex-row items-center justify-center gap-1.5">
-          <Ionicons name="shield-checkmark-outline" size={14} color={BRAND.brand} />
-          <Text className="text-xs font-medium text-brand">Unlock with biometrics</Text>
-        </Pressable>
-
         <Text className="mt-6 text-center text-[10px] text-muted-foreground">
           Access restricted to firm staff · v1.0
         </Text>

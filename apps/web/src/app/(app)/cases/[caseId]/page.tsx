@@ -3,7 +3,7 @@
 import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
 import { Input } from "@CMLP/ui/components/input";
-import { CalendarClock, Check, FileX2, FolderX, History, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Check, FileX2, FolderX, History, PenLine, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
+import { SignDocumentDialog } from "@/components/sign-document-dialog";
 import { StatusPill } from "@/components/status-pill";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
@@ -29,8 +30,9 @@ type Deadline = {
 
 const DOC_TABS = [
   { value: "all", label: "All" },
+  { value: "Filed", label: "Filed" },
   { value: "Signed", label: "Signed" },
-  { value: "Draft", label: "Draft" },
+  { value: "Executed", label: "Executed" },
 ] as const;
 
 type DocFilter = (typeof DOC_TABS)[number]["value"];
@@ -57,6 +59,7 @@ export default function CaseDetailPage() {
   const [docFilter, setDocFilter] = useState<DocFilter>("all");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [signTarget, setSignTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${caseId}`);
   const matter = data?.case;
@@ -200,7 +203,7 @@ export default function CaseDetailPage() {
             <Plus />
             Upload to case
           </Link>
-          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 />
             Delete case
           </Button>
@@ -254,16 +257,35 @@ export default function CaseDetailPage() {
                       <th className="px-4 py-2.5 font-medium">Document</th>
                       <th className="px-4 py-2.5 font-medium">Status</th>
                       <th className="px-4 py-2.5 font-medium">Modified</th>
+                      <th className="px-4 py-2.5 font-medium">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredDocs.map((doc) => (
                       <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                        <td className="px-4 py-2.5 font-medium text-foreground">{doc.name}</td>
+                        <td className="px-4 py-2.5 font-medium text-foreground">
+                          <Link href={`/documents/${doc.id}`} className="hover:text-brand">
+                            {doc.name}
+                          </Link>
+                        </td>
                         <td className="px-4 py-2.5">
                           <StatusPill status={formatStatus(doc.status)} />
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground">{doc.modified}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          {doc.status === "FILED" ? (
+                            <button
+                              type="button"
+                              onClick={() => setSignTarget({ id: doc.id, name: doc.name })}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
+                            >
+                              <PenLine className="size-3" />
+                              Sign
+                            </button>
+                          ) : null}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -393,6 +415,16 @@ export default function CaseDetailPage() {
         isLoading={isDeleting}
         onConfirm={deleteCase}
       />
+
+      {signTarget ? (
+        <SignDocumentDialog
+          documentId={signTarget.id}
+          documentName={signTarget.name}
+          open={Boolean(signTarget)}
+          onOpenChange={(open) => !open && setSignTarget(null)}
+          onSigned={refetch}
+        />
+      ) : null}
     </div>
   );
 }

@@ -2,17 +2,6 @@
 
 import { Button, buttonVariants } from "@CMLP/ui/components/button";
 import { Card, CardContent } from "@CMLP/ui/components/card";
-import { Checkbox } from "@CMLP/ui/components/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@CMLP/ui/components/dialog";
-import { Input } from "@CMLP/ui/components/input";
-import { Label } from "@CMLP/ui/components/label";
 import { Download, FileText, FileX, PenLine, Pencil, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -21,6 +10,7 @@ import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { SignDocumentDialog } from "@/components/sign-document-dialog";
 import { StatusPill } from "@/components/status-pill";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
@@ -54,7 +44,7 @@ type CaseOption = { id: string; title: string; client: { id: string } };
 type FolderOption = { id: string; name: string };
 type HistoryEntry = { id: string; action: string; description: string; actor: string; timestamp: string };
 
-const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
+const STATUSES = ["FILED", "SIGNED", "EXECUTED"] as const;
 const IMAGE_TYPES = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
 
 const ACTION_LABELS: Record<string, string> = {
@@ -80,31 +70,6 @@ export default function DocumentViewerPage() {
   const [nameDraft, setNameDraft] = useState("");
 
   const [signDialogOpen, setSignDialogOpen] = useState(false);
-  const [signerName, setSignerName] = useState("");
-  const [signerRole, setSignerRole] = useState("");
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [isSigning, setIsSigning] = useState(false);
-
-  async function submitSignature() {
-    if (!doc || !signerName.trim() || !consentChecked) return;
-    setIsSigning(true);
-    try {
-      await apiFetch(`/documents/${doc.id}/sign`, {
-        method: "POST",
-        body: JSON.stringify({ signerName: signerName.trim(), signerRole: signerRole.trim() || undefined, consent: true }),
-      });
-      toast.success("Signature recorded.");
-      setSignDialogOpen(false);
-      setSignerName("");
-      setSignerRole("");
-      setConsentChecked(false);
-      refetch();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't record signature.");
-    } finally {
-      setIsSigning(false);
-    }
-  }
 
   const { data: allTagsData } = useApi<{ tags: TagOption[] }>("/tags");
   const allTags = allTagsData?.tags ?? [];
@@ -404,7 +369,7 @@ export default function DocumentViewerPage() {
               <PenLine />
               Sign document
             </Button>
-            <Button variant="outline" className="w-full" onClick={handleDelete} disabled={isDeleting}>
+            <Button variant="destructive" className="w-full" onClick={handleDelete} disabled={isDeleting}>
               <Trash2 />
               {isDeleting ? "Deleting…" : "Delete"}
             </Button>
@@ -412,42 +377,15 @@ export default function DocumentViewerPage() {
         </Card>
       </div>
 
-      <Dialog open={signDialogOpen} onOpenChange={setSignDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign document</DialogTitle>
-            <DialogDescription>
-              Records a typed-name electronic signature — the full name, role, timestamp, and your
-              account as witness are permanently attached to this document's audit trail.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="signer-name">Signer's full name</Label>
-              <Input id="signer-name" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="e.g. Rutendo Mareanadzo" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="signer-role">Role (optional)</Label>
-              <Input id="signer-role" value={signerRole} onChange={(e) => setSignerRole(e.target.value)} placeholder="e.g. Client, Witness, Attorney" />
-            </div>
-            <label htmlFor="signer-consent" className="flex items-start gap-2 text-xs">
-              <Checkbox id="signer-consent" checked={consentChecked} onCheckedChange={(v) => setConsentChecked(v === true)} />
-              <span>
-                I confirm {signerName.trim() || "the signer"} has reviewed this document and intends this as their
-                legally binding electronic signature.
-              </span>
-            </label>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSignDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={submitSignature} disabled={isSigning || !signerName.trim() || !consentChecked}>
-              {isSigning ? "Signing…" : "Confirm signature"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {doc ? (
+        <SignDocumentDialog
+          documentId={doc.id}
+          documentName={doc.name}
+          open={signDialogOpen}
+          onOpenChange={setSignDialogOpen}
+          onSigned={refetch}
+        />
+      ) : null}
 
       {history.length > 0 ? (
         <Card>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@CMLP/ui/components/card";
-import { FileText, FileX2, FolderOpen, HardDrive, Timer } from "lucide-react";
+import { FileText, FileX2, FolderOpen, HardDrive, PenLine } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
@@ -13,7 +13,7 @@ import { formatStatus } from "@/lib/format-status";
 type DashboardSummary = {
   stats: {
     filedThisWeek: number;
-    underReview: number;
+    awaitingSignature: number;
     openCases: number;
     storageUsed: string;
     storageQuotaGb: number;
@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const statCards = stats
     ? [
         { label: "Filed this week", value: String(stats.filedThisWeek), icon: FileText },
-        { label: "Under review", value: String(stats.underReview), icon: Timer },
+        { label: "Awaiting signature", value: String(stats.awaitingSignature), icon: PenLine },
         { label: "Open cases", value: String(stats.openCases), icon: FolderOpen },
         {
           label: "R2 storage used",

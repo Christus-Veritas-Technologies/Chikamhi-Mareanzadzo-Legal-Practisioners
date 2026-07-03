@@ -2,7 +2,7 @@
 
 import { Button } from "@CMLP/ui/components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@CMLP/ui/components/input-group";
-import { FileX, Search, Tag, Trash2, X } from "lucide-react";
+import { FileX, PenLine, Search, Tag, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
+import { SignDocumentDialog } from "@/components/sign-document-dialog";
 import { StatusPill } from "@/components/status-pill";
 import { apiFetch, useApi } from "@/hooks/use-api";
 import { formatStatus } from "@/lib/format-status";
@@ -31,7 +32,7 @@ type ClientOption = { id: string; name: string };
 type CaseOption = { id: string; title: string; client: { id: string } };
 type TagOption = { id: string; name: string };
 
-const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
+const STATUSES = ["FILED", "SIGNED", "EXECUTED"] as const;
 const PAGE_SIZE = 25;
 
 export default function DocumentsPage() {
@@ -82,6 +83,7 @@ function DocumentsPageInner() {
   const [bulkTagId, setBulkTagId] = useState("");
   const [bulkCaseId, setBulkCaseId] = useState("");
   const [isBulkWorking, setIsBulkWorking] = useState(false);
+  const [signTarget, setSignTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Selection is by id only, so it can't survive a "Load more"/filter change pointing at a
   // different result set — clear it whenever the visible page changes underneath it.
@@ -249,7 +251,12 @@ function DocumentsPageInner() {
               </option>
             ))}
           </select>
-          <Button size="sm" variant="outline" disabled={!bulkTagId || isBulkWorking} onClick={applyBulkTag}>
+          <Button
+            size="sm"
+            variant={bulkTagId ? "default" : "outline"}
+            disabled={!bulkTagId || isBulkWorking}
+            onClick={applyBulkTag}
+          >
             <Tag />
             Apply
           </Button>
@@ -265,10 +272,15 @@ function DocumentsPageInner() {
               </option>
             ))}
           </select>
-          <Button size="sm" variant="outline" disabled={!bulkCaseId || isBulkWorking} onClick={applyBulkMove}>
+          <Button
+            size="sm"
+            variant={bulkCaseId ? "default" : "outline"}
+            disabled={!bulkCaseId || isBulkWorking}
+            onClick={applyBulkMove}
+          >
             Move
           </Button>
-          <Button size="sm" variant="outline" disabled={isBulkWorking} onClick={applyBulkDelete}>
+          <Button size="sm" variant="destructive" disabled={isBulkWorking} onClick={applyBulkDelete}>
             <Trash2 />
             Delete
           </Button>
@@ -312,6 +324,9 @@ function DocumentsPageInner() {
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium">Uploaded by</th>
                   <th className="px-4 py-2.5 font-medium">Modified</th>
+                  <th className="px-4 py-2.5 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -336,6 +351,18 @@ function DocumentsPageInner() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
                     <td className="px-4 py-3 text-muted-foreground">{doc.modified}</td>
+                    <td className="px-4 py-3 text-right">
+                      {doc.status === "FILED" ? (
+                        <button
+                          type="button"
+                          onClick={() => setSignTarget({ id: doc.id, name: doc.name })}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
+                        >
+                          <PenLine className="size-3" />
+                          Sign
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -351,6 +378,16 @@ function DocumentsPageInner() {
           />
         ) : null}
       </div>
+
+      {signTarget ? (
+        <SignDocumentDialog
+          documentId={signTarget.id}
+          documentName={signTarget.name}
+          open={Boolean(signTarget)}
+          onOpenChange={(open) => !open && setSignTarget(null)}
+          onSigned={refetch}
+        />
+      ) : null}
     </div>
   );
 }

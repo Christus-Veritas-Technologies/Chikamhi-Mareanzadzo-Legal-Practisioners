@@ -189,7 +189,7 @@ export default function ClientDetailPage() {
             trigger={<Button variant="outline">Edit client</Button>}
           />
           <CaseFormDialog clientId={client.id} onSaved={refetch} trigger={<Button>New case</Button>} />
-          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 />
             Delete client
           </Button>

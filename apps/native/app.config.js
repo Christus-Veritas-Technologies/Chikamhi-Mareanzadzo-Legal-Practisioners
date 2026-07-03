@@ -63,6 +63,7 @@ module.exports = {
     slug: "CMLP",
     icon: "./assets/images/icon.png",
     plugins: [
+      "expo-router",
       "expo-font",
       [
         "expo-splash-screen",
@@ -110,18 +111,14 @@ module.exports = {
                   // start, which makes the .apk file itself bigger — worth
                   // trading away for a distributable file.
                   useLegacyPackaging: true,
-                  // TEMPORARILY OFF as a diagnostic: the production build is crashing on
-                  // launch on a physical device even with the safe-area-context keep rule
-                  // added, which means R8 is very likely still stripping something else.
-                  // Rather than guess proguard rules one at a time through slow production
-                  // builds, minification (and shrinkResources, which AGP requires to be
-                  // off when minify is off) is disabled here so the next build tells us
-                  // definitively whether R8 is the cause at all. If that build launches
-                  // fine, flip these back to true and we chase down the remaining stripped
-                  // class with an adb logcat from a minified build. If it STILL crashes
-                  // with minify off, the cause is unrelated to R8 entirely.
-                  enableMinifyInReleaseBuilds: false,
-                  enableShrinkResourcesInReleaseBuilds: false,
+                  // Re-enabled: a build with this off (plus the cleartext-traffic fix)
+                  // crashed identically, which rules out R8/minification as the cause.
+                  // The real culprit was expo-splash-screen being pinned to a version
+                  // built for a different Expo SDK than the rest of the project (see
+                  // `expo install --check` output) — a native-code version mismatch in
+                  // a module that runs at the very first moment of app launch.
+                  enableMinifyInReleaseBuilds: true,
+                  enableShrinkResourcesInReleaseBuilds: true,
                   // Compresses the JS bundle inside the APK too. Slightly
                   // slower cold start in exchange for a smaller file.
                   enableBundleCompression: true,

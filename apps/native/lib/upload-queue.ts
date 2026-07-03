@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, File, Paths, UploadTask, UploadType } from "expo-file-system";
 import * as Network from "expo-network";
 
 import { apiFetch } from "@/lib/api";
@@ -161,13 +161,18 @@ export async function processQueue(token: string | null): Promise<void> {
         });
 
         if (uploadUrl) {
-          const blob = await (await fetch(entry.localUri)).blob();
-          const putRes = await fetch(uploadUrl, {
-            method: "PUT",
+          // Uploads the file directly from disk via the native upload task instead of
+          // fetch().blob() — React Native's Blob implementation doesn't support being built
+          // from an ArrayBuffer/ArrayBufferView, which is what fetch(localUri).blob() needs
+          // internally, and throws "Creating blobs from ArrayBuffer and ArrayBufferView are
+          // not supported." This sidesteps Blob entirely.
+          const uploadTask = new UploadTask(new File(entry.localUri), uploadUrl, {
+            httpMethod: "PUT",
+            uploadType: UploadType.BINARY_CONTENT,
             headers: { "Content-Type": entry.contentType },
-            body: blob,
           });
-          if (!putRes.ok) {
+          const putRes = await uploadTask.uploadAsync();
+          if (putRes.status < 200 || putRes.status >= 300) {
             throw new Error(`Couldn't upload this scan to storage (${putRes.status}). Will retry automatically.`);
           }
 

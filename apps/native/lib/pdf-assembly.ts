@@ -21,7 +21,7 @@ export async function assembleScanPdf(pageUris: string[]): Promise<{ uri: string
   if (outFile.exists) outFile.delete();
   outFile.create();
   // write() resolves asynchronously — await it so the file is fully flushed to disk before
-  // the caller reads it back (e.g. via fetch(uri).blob() for the upload PUT).
+  // the caller reads it back (the upload queue reads this file directly via UploadTask).
   await outFile.write(pdfBytes);
 
   return { uri: outFile.uri, sizeBytes: pdfBytes.byteLength };

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { LoadMoreButton } from "@/components/load-more-button";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
+import { SignDocumentModal } from "@/components/sign-document-modal";
 import { StatusPill } from "@/components/status-pill";
 import { useAppDrawer } from "@/contexts/drawer-context";
 import { useAuth } from "@/contexts/auth-context";
@@ -34,7 +35,7 @@ type TagOption = { id: string; name: string };
 
 type FilterKind = "client" | "case" | "tag" | "status" | null;
 
-const STATUSES = ["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"] as const;
+const STATUSES = ["FILED", "SIGNED", "EXECUTED"] as const;
 const PAGE_SIZE = 25;
 
 export default function DocsScreen() {
@@ -55,6 +56,7 @@ export default function DocsScreen() {
   const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [signTarget, setSignTarget] = useState<{ id: string; name: string } | null>(null);
 
   function toggleSelectMode() {
     setSelectMode((s) => !s);
@@ -168,7 +170,7 @@ export default function DocsScreen() {
 
   return (
     <View className="flex-1">
-      <Container className="px-5 pt-3">
+      <Container className="px-5 pt-9">
       <View className="flex-row items-center justify-between">
         <View>
           <Text className="font-serif text-xl font-semibold text-foreground">Documents</Text>
@@ -376,19 +378,30 @@ export default function DocsScreen() {
                   <StatusPill status={formatStatus(doc.status)} />
                 </Pressable>
               ) : (
-                <Link key={doc.id} href={`/doc/${doc.id}`} asChild>
-                  <Pressable className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3">
-                    <View className="min-w-0 flex-1 pr-2">
-                      <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                        {doc.name}
-                      </Text>
-                      <Text numberOfLines={1} className="text-xs text-muted-foreground">
-                        {doc.case?.title ?? doc.client?.name ?? "—"} · {doc.modified}
-                      </Text>
-                    </View>
-                    <StatusPill status={formatStatus(doc.status)} />
-                  </Pressable>
-                </Link>
+                <View key={doc.id} className="rounded-xl border border-border">
+                  <Link href={`/doc/${doc.id}`} asChild>
+                    <Pressable className="flex-row items-center justify-between px-3 py-3">
+                      <View className="min-w-0 flex-1 pr-2">
+                        <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                          {doc.name}
+                        </Text>
+                        <Text numberOfLines={1} className="text-xs text-muted-foreground">
+                          {doc.case?.title ?? doc.client?.name ?? "—"} · {doc.modified}
+                        </Text>
+                      </View>
+                      <StatusPill status={formatStatus(doc.status)} />
+                    </Pressable>
+                  </Link>
+                  {doc.status === "FILED" ? (
+                    <Pressable
+                      onPress={() => setSignTarget({ id: doc.id, name: doc.name })}
+                      className="flex-row items-center gap-1 border-t border-border px-3 py-2"
+                    >
+                      <Ionicons name="create-outline" size={13} color="#C99A3F" />
+                      <Text className="text-xs font-medium text-brand">Sign</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ),
             )
           )}
@@ -458,14 +471,30 @@ export default function DocsScreen() {
       <ConfirmDialog
         visible={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
-        title={`Delete ${selected.size} document(s)?`}
-        description="They'll be moved to Trash."
+        title="Delete selected documents?"
+        description={`${selected.size} document${selected.size === 1 ? "" : "s"} will be moved to Trash and can be restored within 30 days.`}
         confirmLabel="Delete"
         destructive
         isLoading={isBulkWorking}
         onConfirm={bulkDelete}
       />
-      <AlertDialog visible={Boolean(alertMessage)} onOpenChange={(open) => !open && setAlertMessage(null)} title="Couldn't complete action" description={alertMessage ?? undefined} />
+
+      <AlertDialog
+        visible={Boolean(alertMessage)}
+        onOpenChange={(open) => !open && setAlertMessage(null)}
+        title="Couldn't complete action"
+        description={alertMessage ?? undefined}
+      />
+
+      {signTarget ? (
+        <SignDocumentModal
+          documentId={signTarget.id}
+          documentName={signTarget.name}
+          visible={Boolean(signTarget)}
+          onOpenChange={(open) => !open && setSignTarget(null)}
+          onSigned={refetch}
+        />
+      ) : null}
     </View>
   );
 }

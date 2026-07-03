@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Link, Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
@@ -93,7 +93,7 @@ export default function FoldersTagsScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Folders & Tags" }} />
 
       <View className="flex-row items-center justify-between">
@@ -110,30 +110,33 @@ export default function FoldersTagsScreen() {
           {folders.length === 0 ? <EmptyState icon="folder-open-outline" title="No folders yet" /> : null}
 
           {folders.map((folder) => (
-            <Pressable
+            <View
               key={folder.id}
-              onLongPress={() => setDeleteFolderTarget(folder)}
               className="flex-row items-center gap-3 rounded-xl border border-border px-3 py-3"
             >
-              <Ionicons name="folder-outline" size={18} color="#C89A54" />
-              <View className="flex-1">
-                <Text className="text-sm font-medium text-foreground">{folder.name}</Text>
-                <Text className="text-xs text-muted-foreground">{folder.documentCount} documents</Text>
-                {folder.tags.length > 0 ? (
-                  <View className="mt-1 flex-row flex-wrap gap-1">
-                    {folder.tags.map((tag) => (
-                      <View key={tag.id} className="flex-row items-center gap-1 rounded-full bg-muted/40 px-1.5 py-0.5">
-                        <View className={`h-1.5 w-1.5 rounded-full ${tag.colorClass}`} />
-                        <Text className="text-[10px] text-muted-foreground">{tag.name}</Text>
+              <Link href={`/folder/${folder.id}`} asChild>
+                <Pressable className="flex-1 flex-row items-center gap-3">
+                  <Ionicons name="folder-outline" size={18} color="#C89A54" />
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-foreground">{folder.name}</Text>
+                    <Text className="text-xs text-muted-foreground">{folder.documentCount} documents</Text>
+                    {folder.tags.length > 0 ? (
+                      <View className="mt-1 flex-row flex-wrap gap-1">
+                        {folder.tags.map((tag) => (
+                          <View key={tag.id} className="flex-row items-center gap-1 rounded-full bg-muted/40 px-1.5 py-0.5">
+                            <View className={`h-1.5 w-1.5 rounded-full ${tag.colorClass}`} />
+                            <Text className="text-[10px] text-muted-foreground">{tag.name}</Text>
+                          </View>
+                        ))}
                       </View>
-                    ))}
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
+                </Pressable>
+              </Link>
               <Pressable onPress={() => setDeleteFolderTarget(folder)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={16} color="#8A8378" />
+                <Ionicons name="trash-outline" size={16} color="#B3413A" />
               </Pressable>
-            </Pressable>
+            </View>
           ))}
 
           <Pressable
@@ -179,14 +182,18 @@ export default function FoldersTagsScreen() {
                   className="w-20 text-xs text-foreground"
                 />
               ) : (
-                <Text className="text-xs text-foreground">{tag.name}</Text>
+                <Link href={`/tag/${tag.id}`} asChild>
+                  <Pressable>
+                    <Text className="text-xs text-foreground">{tag.name}</Text>
+                  </Pressable>
+                </Link>
               )}
               <Text className="text-[10px] text-muted-foreground">· {tag.documentCount}</Text>
               <Pressable onPress={() => startEditingTag(tag)} hitSlop={6}>
                 <Ionicons name="pencil-outline" size={11} color="#8A8378" />
               </Pressable>
               <Pressable onPress={() => setDeleteTagTarget(tag)} hitSlop={6}>
-                <Ionicons name="trash-outline" size={11} color="#8A8378" />
+                <Ionicons name="trash-outline" size={11} color="#B3413A" />
               </Pressable>
             </View>
           ))}

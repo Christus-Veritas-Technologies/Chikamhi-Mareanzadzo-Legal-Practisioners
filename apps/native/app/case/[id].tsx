@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
 import { SegmentedTabs } from "@/components/segmented-tabs";
+import { SignDocumentModal } from "@/components/sign-document-modal";
 import { StatusPill } from "@/components/status-pill";
 import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
@@ -25,8 +26,9 @@ type Deadline = {
 
 const DOC_TABS = [
   { value: "all", label: "All" },
+  { value: "Filed", label: "Filed" },
   { value: "Signed", label: "Signed" },
-  { value: "Draft", label: "Draft" },
+  { value: "Executed", label: "Executed" },
 ] as const;
 
 type DocFilter = (typeof DOC_TABS)[number]["value"];
@@ -53,6 +55,7 @@ export default function CaseDetailScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [signTarget, setSignTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { token } = useAuth();
   const { data, isLoading, error, refetch } = useApi<{ case: CaseDetail }>(`/cases/${id}`);
@@ -149,7 +152,7 @@ export default function CaseDetailScreen() {
   const timeline = matter.timeline;
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: matter.caseNumber }} />
 
       <View className="flex-row items-start justify-between gap-2">
@@ -204,17 +207,27 @@ export default function CaseDetailScreen() {
           />
         ) : (
           filteredDocs.map((doc) => (
-            <View
-              key={doc.id}
-              className="flex-row items-center justify-between rounded-xl border border-border px-3 py-3"
-            >
-              <View className="min-w-0 flex-1 pr-2">
-                <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                  {doc.name}
-                </Text>
-                <Text className="text-xs text-muted-foreground">{doc.modified}</Text>
-              </View>
-              <StatusPill status={formatStatus(doc.status)} />
+            <View key={doc.id} className="rounded-xl border border-border">
+              <Link href={`/doc/${doc.id}`} asChild>
+                <Pressable className="flex-row items-center justify-between px-3 py-3">
+                  <View className="min-w-0 flex-1 pr-2">
+                    <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                      {doc.name}
+                    </Text>
+                    <Text className="text-xs text-muted-foreground">{doc.modified}</Text>
+                  </View>
+                  <StatusPill status={formatStatus(doc.status)} />
+                </Pressable>
+              </Link>
+              {doc.status === "FILED" ? (
+                <Pressable
+                  onPress={() => setSignTarget({ id: doc.id, name: doc.name })}
+                  className="flex-row items-center gap-1 border-t border-border px-3 py-2"
+                >
+                  <Ionicons name="create-outline" size={13} color="#C99A3F" />
+                  <Text className="text-xs font-medium text-brand">Sign</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))
         )}
@@ -328,6 +341,16 @@ export default function CaseDetailScreen() {
         title="Couldn't delete case"
         description={deleteError ?? undefined}
       />
+
+      {signTarget ? (
+        <SignDocumentModal
+          documentId={signTarget.id}
+          documentName={signTarget.name}
+          visible={Boolean(signTarget)}
+          onOpenChange={(open) => !open && setSignTarget(null)}
+          onSigned={refetch}
+        />
+      ) : null}
     </Container>
   );
 }

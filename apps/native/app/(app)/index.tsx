@@ -16,7 +16,7 @@ import { formatStatus } from "@/lib/format-status";
 type DashboardSummary = {
   stats: {
     filedThisWeek: number;
-    underReview: number;
+    awaitingSignature: number;
     openCases: number;
     storageUsed: string;
     storageQuotaGb: number;
@@ -47,7 +47,7 @@ export default function HomeScreen() {
   const unreadCount = notificationsData?.unreadCount ?? 0;
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       {/* Header */}
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
@@ -95,8 +95,8 @@ export default function HomeScreen() {
               </Pressable>
             </Link>
             <View className="flex-1 rounded-xl border border-border px-4 py-4">
-              <Text className="text-xl font-semibold text-foreground">{stats?.underReview ?? 0}</Text>
-              <Text className="mt-0.5 text-xs text-muted-foreground">Under review</Text>
+              <Text className="text-xl font-semibold text-foreground">{stats?.awaitingSignature ?? 0}</Text>
+              <Text className="mt-0.5 text-xs text-muted-foreground">Awaiting signature</Text>
             </View>
           </View>
 
@@ -146,5 +146,5 @@ export default function HomeScreen() {
 }
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
-  return <RouteError error={error} retry={retry} title="Couldn't load your home screen" />;
+  return <RouteError error={error} retry={retry} title="Couldn't load your dashboard" />;
 }

@@ -1,17 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 
 import { AlertDialog } from "@/components/confirm-dialog";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/components/empty-state";
 import { InlineError, LoadingState } from "@/components/loading-state";
 import { RouteError } from "@/components/route-error";
+import { SignDocumentModal } from "@/components/sign-document-modal";
 import { StatusPill } from "@/components/status-pill";
-import { useAuth } from "@/contexts/auth-context";
 import { useApi } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/api";
 import { downloadDocument, isDownloaded } from "@/lib/downloads";
 import { formatStatus } from "@/lib/format-status";
 
@@ -40,46 +39,13 @@ const IMAGE_TYPES = ["jpg", "jpeg", "png", "heic", "webp"];
 
 export default function DocumentViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { token } = useAuth();
   const { data, isLoading, error, refetch } = useApi<{ document: DocumentDetail }>(`/documents/${id}`);
   const doc = data?.document;
   const [isDownloading, setIsDownloading] = useState(false);
   const [savedOffline, setSavedOffline] = useState(false);
 
   const [signModalOpen, setSignModalOpen] = useState(false);
-  const [signerName, setSignerName] = useState("");
-  const [signerRole, setSignerRole] = useState("");
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [isSigning, setIsSigning] = useState(false);
   const [alertInfo, setAlertInfo] = useState<{ title: string; description?: string } | null>(null);
-
-  async function submitSignature() {
-    if (!doc || !signerName.trim() || !consentChecked) return;
-    setIsSigning(true);
-    try {
-      await apiFetch(`/documents/${doc.id}/sign`, {
-        method: "POST",
-        body: { signerName: signerName.trim(), signerRole: signerRole.trim() || undefined, consent: true },
-        token,
-      });
-      setSignModalOpen(false);
-      setSignerName("");
-      setSignerRole("");
-      setConsentChecked(false);
-      refetch();
-      setAlertInfo({
-        title: "Signature recorded",
-        description: "This document's signature has been added to its audit trail.",
-      });
-    } catch (err) {
-      setAlertInfo({
-        title: "Couldn't sign document",
-        description: err instanceof Error ? err.message : "Please try again.",
-      });
-    } finally {
-      setIsSigning(false);
-    }
-  }
 
   useEffect(() => {
     if (doc) setSavedOffline(isDownloaded(doc.id));
@@ -131,7 +97,7 @@ export default function DocumentViewerScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: doc.name }} />
 
       <View className="h-64 items-center justify-center overflow-hidden rounded-xl bg-muted/15">
@@ -237,56 +203,22 @@ export default function DocumentViewerScreen() {
         <Text className="text-sm font-semibold text-foreground">Sign document</Text>
       </Pressable>
 
-      <Modal visible={signModalOpen} transparent animationType="fade">
-        <View className="flex-1 items-center justify-center bg-black/40 px-8">
-          <View className="w-full gap-3 rounded-xl bg-background p-4">
-            <Text className="text-sm font-semibold text-foreground">Sign document</Text>
-            <Text className="text-xs text-muted-foreground">
-              Records a typed-name electronic signature — name, role, timestamp, and your account as
-              witness are permanently attached to this document's audit trail.
-            </Text>
-            <TextInput
-              value={signerName}
-              onChangeText={setSignerName}
-              placeholder="Signer's full name"
-              placeholderTextColor="#8A8378"
-              className="rounded-lg border border-border px-3 py-2.5 text-sm text-foreground"
-            />
-            <TextInput
-              value={signerRole}
-              onChangeText={setSignerRole}
-              placeholder="Role (optional) — e.g. Client, Witness"
-              placeholderTextColor="#8A8378"
-              className="rounded-lg border border-border px-3 py-2.5 text-sm text-foreground"
-            />
-            <Pressable onPress={() => setConsentChecked((c) => !c)} className="flex-row items-start gap-2">
-              <View
-                className={`mt-0.5 h-4 w-4 items-center justify-center rounded-sm border ${consentChecked ? "border-success bg-success" : "border-input"}`}
-              >
-                {consentChecked ? <Ionicons name="checkmark" size={10} color="white" /> : null}
-              </View>
-              <Text className="flex-1 text-xs text-muted-foreground">
-                I confirm {signerName.trim() || "the signer"} has reviewed this document and intends this as
-                their legally binding electronic signature.
-              </Text>
-            </Pressable>
-            <View className="flex-row justify-end gap-3">
-              <Pressable onPress={() => setSignModalOpen(false)} className="px-3 py-2">
-                <Text className="text-sm text-muted-foreground">Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={submitSignature}
-                disabled={isSigning || !signerName.trim() || !consentChecked}
-                className="rounded-xl bg-primary px-4 py-2"
-              >
-                <Text className="text-sm font-semibold text-primary-foreground">
-                  {isSigning ? "Signing…" : "Confirm signature"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {doc ? (
+        <SignDocumentModal
+          documentId={doc.id}
+          documentName={doc.name}
+          visible={signModalOpen}
+          onOpenChange={setSignModalOpen}
+          onSigned={() => {
+            refetch();
+            setAlertInfo({
+              title: "Signature recorded",
+              description: "This document's signature has been added to its audit trail.",
+            });
+          }}
+          onError={(message) => setAlertInfo({ title: "Couldn't sign document", description: message })}
+        />
+      ) : null}
 
       <AlertDialog
         visible={Boolean(alertInfo)}
@@ -301,3 +233,4 @@ export default function DocumentViewerScreen() {
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return <RouteError error={error} retry={retry} title="Couldn't load this document" />;
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       

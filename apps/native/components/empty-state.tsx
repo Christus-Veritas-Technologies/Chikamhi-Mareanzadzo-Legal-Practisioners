@@ -16,7 +16,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <View className="items-center justify-center gap-1 px-8 py-14">
+    <View className="items-center justify-center gap-1 px-8 py-6">
       <View className="mb-1 h-10 w-10 items-center justify-center rounded-full bg-muted">
         <Ionicons name={icon} size={18} color="#8A8378" />
       </View>

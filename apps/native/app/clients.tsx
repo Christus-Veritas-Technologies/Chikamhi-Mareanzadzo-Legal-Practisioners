@@ -35,7 +35,7 @@ export default function ClientsScreen() {
   }, [clients, query]);
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Text className="mt-0.5 text-xs text-muted-foreground">
         {clients.length} active clients · {totalOpenCases} open cases
       </Text>

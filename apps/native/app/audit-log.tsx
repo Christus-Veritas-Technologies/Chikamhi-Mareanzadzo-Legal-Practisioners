@@ -90,7 +90,7 @@ function AuditLogContent() {
   const entries = data?.entries ?? [];
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Audit Log" }} />
       <Text className="text-xs text-muted-foreground">
         Every action on every document. Retained for 7 years.

@@ -56,7 +56,7 @@ export default function CasesScreen() {
   }, [allData]);
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <View className="flex-row items-center justify-between">
         <View>
           <Text className="font-serif text-xl font-semibold text-foreground">Cases</Text>

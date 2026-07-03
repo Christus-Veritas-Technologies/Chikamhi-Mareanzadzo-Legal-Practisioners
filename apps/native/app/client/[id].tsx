@@ -93,7 +93,7 @@ export default function ClientDetailScreen() {
   const cases = client.cases;
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: client.name }} />
 
       <View className="flex-row items-center gap-3">

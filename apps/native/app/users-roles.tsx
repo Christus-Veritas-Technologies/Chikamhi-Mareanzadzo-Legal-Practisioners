@@ -134,7 +134,7 @@ function UsersRolesContent({ token, currentUserId }: { token: string | null; cur
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Users & Roles" }} />
 
       <View className="flex-row items-center justify-between">

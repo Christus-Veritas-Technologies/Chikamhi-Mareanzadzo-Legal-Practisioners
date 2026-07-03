@@ -51,7 +51,7 @@ export default function UploadQueueScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Upload queue" }} />
 
       {isOffline ? (

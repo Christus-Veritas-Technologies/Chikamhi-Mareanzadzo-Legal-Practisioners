@@ -72,7 +72,7 @@ export default function SearchScreen() {
   const selectedTagName = tags.find((t) => t.id === tagId)?.name;
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Text className="font-serif text-xl font-semibold text-foreground">Search</Text>
 
       <View className="mt-3 flex-row items-center gap-2 rounded-xl border border-border px-3 py-2.5">

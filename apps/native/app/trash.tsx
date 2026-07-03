@@ -80,7 +80,7 @@ export default function TrashScreen() {
   const [tab, setTab] = useState<Tab>("documents");
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Trash" }} />
 
       <View className="flex-row items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5">

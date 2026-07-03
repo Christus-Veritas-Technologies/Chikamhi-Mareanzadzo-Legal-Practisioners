@@ -9,7 +9,7 @@ import {
   TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/auth-context";
@@ -57,9 +57,11 @@ export default function SignInScreen() {
       </View>
 
       {/* Sign-in sheet */}
-      <View
-        className="flex-1 rounded-t-[28px] bg-background px-6 pt-8"
-        style={{ paddingBottom: insets.bottom + 24 }}
+      <View className="flex-1 rounded-t-[28px] bg-background">
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: insets.bottom + 24 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Text className="font-serif text-2xl font-semibold text-foreground">Sign in</Text>
         <Text className="mt-1 mb-6 text-sm text-muted-foreground">
@@ -154,6 +156,7 @@ export default function SignInScreen() {
         <Text className="mt-6 text-center text-[10px] text-muted-foreground">
           Access restricted to firm staff · v1.0
         </Text>
+      </ScrollView>
       </View>
     </View>
   );

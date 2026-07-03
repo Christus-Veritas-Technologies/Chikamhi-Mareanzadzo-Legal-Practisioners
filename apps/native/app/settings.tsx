@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { File, UploadTask, UploadType } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
 import { useThemeColor } from "heroui-native";
@@ -82,13 +83,17 @@ export default function SettingsScreen() {
         token,
       });
 
-      const fileBlob = await (await fetch(asset.uri)).blob();
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
+      // Uploads directly from disk via the native upload task instead of fetch().blob() —
+      // React Native's Blob implementation can't be built from an ArrayBuffer/
+      // ArrayBufferView, which is what fetch(uri).blob() needs internally, and throws
+      // "Creating blobs from ArrayBuffer and ArrayBufferView are not supported."
+      const uploadTask = new UploadTask(new File(asset.uri), uploadUrl, {
+        httpMethod: "PUT",
+        uploadType: UploadType.BINARY_CONTENT,
         headers: { "Content-Type": contentType },
-        body: fileBlob,
       });
-      if (!putRes.ok) throw new Error("Photo upload failed.");
+      const putRes = await uploadTask.uploadAsync();
+      if (putRes.status < 200 || putRes.status >= 300) throw new Error("Photo upload failed.");
 
       await refreshUser();
     } catch (err) {
@@ -149,7 +154,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background px-5 pt-3" contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView className="flex-1 bg-background px-5 pt-9" contentContainerStyle={{ paddingBottom: 40 }}>
       <Stack.Screen options={{ title: "Settings" }} />
 
       <View className="flex-row items-center gap-4">

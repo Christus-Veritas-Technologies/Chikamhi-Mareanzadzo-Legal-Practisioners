@@ -22,7 +22,7 @@ export default function ScanReviewScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Review scan" }} />
 
       {pages.length === 0 ? (

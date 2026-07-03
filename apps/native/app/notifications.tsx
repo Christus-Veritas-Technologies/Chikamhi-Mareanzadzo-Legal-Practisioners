@@ -66,7 +66,7 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <Container className="px-5 pt-3">
+    <Container className="px-5 pt-9">
       <Stack.Screen options={{ title: "Notifications" }} />
 
       <View className="flex-row items-center justify-between">

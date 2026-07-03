@@ -93,7 +93,7 @@ export default function GalleryAssignScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background px-5 pt-3" contentContainerStyle={{ paddingBottom: 32 }}>
+    <ScrollView className="flex-1 bg-background px-5 pt-9" contentContainerStyle={{ paddingBottom: 32 }}>
       <Stack.Screen options={{ title: "Assign & upload" }} />
 
       <Text className="text-xs text-muted-foreground">

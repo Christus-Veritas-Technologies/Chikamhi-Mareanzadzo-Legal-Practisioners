@@ -117,16 +117,30 @@ export default function ScanScreen() {
         </View>
       </View>
 
-      {pages.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-4 pb-2">
-          {pages.map((uri, i) => (
-            <Pressable key={uri} onPress={() => removePage(i)} className="mr-2 items-center">
-              <Image source={{ uri }} className="h-16 w-12 rounded-md" resizeMode="cover" />
-              <Text className="mt-0.5 text-[9px] text-ink-foreground/60">{i + 1}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
+      {/* Always reserved at a fixed height (even with zero pages) so capturing the first
+          page never reflows — and therefore never shifts — the camera preview above. */}
+      <View className="h-20 px-4 pb-2" pointerEvents={pages.length > 0 ? "auto" : "none"}>
+        {pages.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {pages.slice(0, 9).map((uri, i) => (
+              <Pressable key={uri} onPress={() => removePage(i)} className="mr-2 items-center">
+                <Image source={{ uri }} className="h-16 w-12 rounded-md" resizeMode="cover" />
+                <Text className="mt-0.5 text-[9px] text-ink-foreground/60">{i + 1}</Text>
+              </Pressable>
+            ))}
+            {pages.length > 9 ? (
+              <View className="items-center justify-center">
+                <View className="h-16 w-12 items-center justify-center rounded-md bg-ink-foreground/10">
+                  <Text className="text-[10px] font-semibold text-ink-foreground">
+                    +{pages.length - 9}
+                  </Text>
+                </View>
+                <Text className="mt-0.5 text-[9px] text-ink-foreground/60">more</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+        ) : null}
+      </View>
 
       <View
         className="flex-row items-center justify-between px-8 pt-2"

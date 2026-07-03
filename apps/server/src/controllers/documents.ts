@@ -192,7 +192,7 @@ export async function createDocument(c: Context) {
     data: {
       ...docFields,
       sizeBytes,
-      status: "DRAFT",
+      status: "FILED",
       uploadedById: user.id,
     },
   });
@@ -328,7 +328,7 @@ export async function signDocument(c: Context) {
     },
   });
 
-  if (doc.status === "DRAFT" || doc.status === "UNDER_REVIEW" || doc.status === "FILED") {
+  if (doc.status === "FILED") {
     await prisma.document.update({ where: { id }, data: { status: "SIGNED" } });
   }
 
@@ -361,7 +361,7 @@ export async function signDocument(c: Context) {
 
 const updateDocumentSchema = z.object({
   name: z.string().min(1).optional(),
-  status: z.enum(["DRAFT", "UNDER_REVIEW", "FILED", "SIGNED", "EXECUTED"]).optional(),
+  status: z.enum(["FILED", "SIGNED", "EXECUTED"]).optional(),
   caseId: z.string().nullable().optional(),
   folderId: z.string().nullable().optional(),
 });

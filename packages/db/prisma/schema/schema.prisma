@@ -32,8 +32,6 @@ enum CaseStatus {
 }
 
 enum DocumentStatus {
-  DRAFT
-  UNDER_REVIEW
   FILED
   SIGNED
   EXECUTED
@@ -228,7 +226,7 @@ model Document {
   id           String         @id @default(cuid())
   name         String
   fileType     String
-  status       DocumentStatus @default(DRAFT)
+  status       DocumentStatus @default(FILED)
   storageKey   String? // Cloudflare R2 object key — nullable until real upload is wired
   sizeBytes    Int?
   clientId     String

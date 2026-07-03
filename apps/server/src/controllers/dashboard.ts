@@ -23,9 +23,9 @@ function relativeTime(date: Date) {
 export async function getDashboardSummary(c: Context) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3_600_000);
 
-  const [filedThisWeek, underReview, openCases, storageAgg, recentDocuments] = await Promise.all([
+  const [filedThisWeek, awaitingSignature, openCases, storageAgg, recentDocuments] = await Promise.all([
     prisma.document.count({ where: { status: "FILED", updatedAt: { gte: sevenDaysAgo }, deletedAt: null } }),
-    prisma.document.count({ where: { status: "UNDER_REVIEW", deletedAt: null } }),
+    prisma.document.count({ where: { status: "FILED", deletedAt: null } }),
     prisma.case.count({ where: { status: "ACTIVE" } }),
     prisma.document.aggregate({ where: { deletedAt: null }, _sum: { sizeBytes: true } }),
     prisma.document.findMany({
@@ -44,7 +44,7 @@ export async function getDashboardSummary(c: Context) {
   return c.json({
     stats: {
       filedThisWeek,
-      underReview,
+      awaitingSignature,
       openCases,
       storageUsed: formatBytes(storageAgg._sum.sizeBytes ?? 0),
       storageQuotaGb: STORAGE_QUOTA_GB,

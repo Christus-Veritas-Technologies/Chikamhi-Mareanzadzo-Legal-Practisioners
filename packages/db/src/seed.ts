@@ -52,12 +52,12 @@ const CASES = [
 const DOCUMENTS = [
   { name: "Deed of Sale — Stand 4471.pdf", fileType: "pdf", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "EXECUTED" as const, uploadedByUsername: "r.mareanadzo", folder: "Conveyancing", sizeBytes: 420_000 },
   { name: "Power of Attorney.pdf", fileType: "pdf", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "FILED" as const, uploadedByUsername: "t.chikamhi", folder: "Conveyancing", sizeBytes: 180_000 },
-  { name: "Rates Clearance Certificate.docx", fileType: "docx", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "UNDER_REVIEW" as const, uploadedByUsername: "p.dube", folder: "Conveyancing", sizeBytes: 95_000 },
+  { name: "Rates Clearance Certificate.docx", fileType: "docx", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "FILED" as const, uploadedByUsername: "p.dube", folder: "Conveyancing", sizeBytes: 95_000 },
   { name: "Title Deed 4471 (scan).pdf", fileType: "pdf", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "SIGNED" as const, uploadedByUsername: "t.chikamhi", folder: "Conveyancing", sizeBytes: 1_200_000 },
-  { name: "Transfer Instructions (draft).docx", fileType: "docx", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "DRAFT" as const, uploadedByUsername: "r.mareanadzo", folder: "Conveyancing", sizeBytes: 60_000 },
+  { name: "Transfer Instructions (draft).docx", fileType: "docx", clientKey: "moyo-holdings", caseKey: "stand-4471-transfer", status: "FILED" as const, uploadedByUsername: "r.mareanadzo", folder: "Conveyancing", sizeBytes: 60_000 },
   { name: "Affidavit of Service.pdf", fileType: "pdf", clientKey: "estate-t-ncube", caseKey: "estate-of-t-ncube-probate", status: "FILED" as const, uploadedByUsername: "p.dube", folder: "Deceased estates", sizeBytes: 210_000 },
   { name: "Notice of Set Down.pdf", fileType: "pdf", clientKey: "dube-family", caseKey: "dube-divorce", status: "SIGNED" as const, uploadedByUsername: "r.mareanadzo", folder: "Litigation", sizeBytes: 150_000 },
-  { name: "Rates Clearance Certificate.pdf", fileType: "pdf", clientKey: "bulawayo-city-council", caseKey: "bcc-rates-dispute", status: "UNDER_REVIEW" as const, uploadedByUsername: "p.dube", folder: "Litigation", sizeBytes: 300_000 },
+  { name: "Rates Clearance Certificate.pdf", fileType: "pdf", clientKey: "bulawayo-city-council", caseKey: "bcc-rates-dispute", status: "FILED" as const, uploadedByUsername: "p.dube", folder: "Litigation", sizeBytes: 300_000 },
   { name: "Lease Agreement — Fife St.pdf", fileType: "pdf", clientKey: "zimre-property", caseKey: null, status: "FILED" as const, uploadedByUsername: "r.mareanadzo", folder: "Corporate & commercial", sizeBytes: 275_000 },
 ];
 
